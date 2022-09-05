@@ -5,6 +5,48 @@ import numpy as np
 import torch
 
 
+def clip_coords(boxes, shape):
+    # Clip bounding xyxy bounding boxes to image shape (height, width)
+    if isinstance(boxes, torch.Tensor):  # faster individually
+        boxes[:, 0].clamp_(0, shape[1])  # x1
+        boxes[:, 1].clamp_(0, shape[0])  # y1
+        boxes[:, 2].clamp_(0, shape[1])  # x2
+        boxes[:, 3].clamp_(0, shape[0])  # y2
+    else:  # np.array (faster grouped)
+        boxes[:, [0, 2]] = boxes[:, [0, 2]].clip(0, shape[1])  # x1, x2
+        boxes[:, [1, 3]] = boxes[:, [1, 3]].clip(0, shape[0])  # y1, y2
+
+
+def xywhn_to_xyxy(bboxes, w=640, h=640, padw=0, padh=0):
+    # Convert nx4 boxes from [x, y, w, h] normalized to [x1, y1, x2, y2] where xy1=top-left, xy2=bottom-right
+    converted_bboxes = bboxes.clone() if isinstance(
+        bboxes, torch.Tensor) else np.copy(bboxes)
+    converted_bboxes[:, 0] = w * \
+        (bboxes[:, 0] - bboxes[:, 2] / 2) + padw  # top left x
+    converted_bboxes[:, 1] = h * \
+        (bboxes[:, 1] - bboxes[:, 3] / 2) + padh  # top left y
+    converted_bboxes[:, 2] = w * \
+        (bboxes[:, 0] + bboxes[:, 2] / 2) + padw  # bottom right x
+    converted_bboxes[:, 3] = h * \
+        (bboxes[:, 1] + bboxes[:, 3] / 2) + padh  # bottom right y
+    return converted_bboxes
+
+
+def xyxy_to_xywhn(bboxes, w=640, h=640, clip=False, eps=0.0):
+    # Convert nx4 boxes from [x1, y1, x2, y2] to [x, y, w, h] normalized where xy1=top-left, xy2=bottom-right
+    if clip:
+        clip_coords(bboxes, (h - eps, w - eps))  # warning: inplace clip
+    converted_bboxes = bboxes.clone() if isinstance(
+        bboxes, torch.Tensor) else np.copy(bboxes)
+    converted_bboxes[:, 0] = (
+        (bboxes[:, 0] + bboxes[:, 2]) / 2) / w  # x center
+    converted_bboxes[:, 1] = (
+        (bboxes[:, 1] + bboxes[:, 3]) / 2) / h  # y center
+    converted_bboxes[:, 2] = (bboxes[:, 2] - bboxes[:, 0]) / w  # width
+    converted_bboxes[:, 3] = (bboxes[:, 3] - bboxes[:, 1]) / h  # height
+    return converted_bboxes
+
+
 def xywh_to_xyxy(bboxes: Union[torch.Tensor, np.ndarray]) -> Union[torch.Tensor, np.ndarray]:
     converted_bboxes = bboxes.clone() if isinstance(
         bboxes, torch.Tensor) else bboxes.copy()

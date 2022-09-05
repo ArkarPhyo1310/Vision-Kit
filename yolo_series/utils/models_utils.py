@@ -4,6 +4,19 @@ import torch
 from torch import nn
 
 
+def initialize_weights(model):
+    for m in model.modules():
+        t = type(m)
+        if t is nn.Conv2d:
+            # nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+            pass
+        elif t is nn.BatchNorm2d:
+            m.eps = 1e-3
+            m.momentum = 0.03
+        elif t in [nn.Hardswish, nn.LeakyReLU, nn.ReLU, nn.ReLU6, nn.SiLU]:
+            m.inplace = True
+
+
 def load_ckpt(model, ckpt):
     model_state_dict = model.state_dict()
     load_dict = {}
@@ -25,7 +38,6 @@ def load_ckpt(model, ckpt):
             continue
         load_dict[key_model] = v_ckpt
     model.load_state_dict(load_dict, strict=False)
-    # exit(0)
     return model
 
 
