@@ -1,17 +1,17 @@
 from typing import Optional, Tuple
 
+from loguru import logger
 from pytorch_lightning import LightningDataModule
 from pytorch_lightning.utilities.types import (EVAL_DATALOADERS,
                                                TRAIN_DATALOADERS)
-from torch.utils.data import SequentialSampler, DataLoader
+from torch.utils.data import DataLoader, SequentialSampler
 from yolo_series.data.augmentations import TrainAugPipeline, ValAugPipeline
 from yolo_series.data.sampling import InfiniteSampler, YoloBatchSampler
-from yolo_series.utils.dataset_utils import collate_fn, list_collate, worker_init_reset_seed
+from yolo_series.utils.dataset_utils import collate_fn, worker_init_reset_seed
 from yolo_series.utils.general import search_dir
 
 from .datasets.coco import COCODataset
 from .mosiac_dataset import MosaicDataset
-# from .dataloading import DataLoader
 
 
 class COCODataModule(LightningDataModule):
@@ -21,11 +21,13 @@ class COCODataModule(LightningDataModule):
         train_json: str = "instances_train2017.json",
         val_json: str = "instances_val2017.json",
         test_json: str = None,
+        num_workers: int = 0,
         batch_sz: int = 16,
         img_sz: Tuple[int, int] = (640, 640),
         aug_config: dict = None,
         seed: int = None,
-        cache: bool = True
+        cache: bool = True,
+
     ) -> None:
         super().__init__()
 
@@ -38,15 +40,15 @@ class COCODataModule(LightningDataModule):
         self.aug_config: dict = aug_config
         self.batch_sz: int = batch_sz
         self.seed = seed
+        self.num_workers = num_workers
 
         train_folder = search_dir(data_dir, "train")
         val_folder = search_dir(data_dir, "val")
         test_folder = search_dir(data_dir, "test")
 
-        if train_folder and val_folder:
+        if train_folder:
             self.train_name = train_folder[0]
-            # self.val_name = val_folder[0]
-            self.val_name = train_folder[0]
+            self.val_name = train_folder[0] if not val_folder else val_folder[0]
         else:
             raise Exception("Training or Validation data are not found!")
 
@@ -59,7 +61,8 @@ class COCODataModule(LightningDataModule):
             if test_folder:
                 self.test_name = test_folder[0]
             else:
-                print("Testing data not found! Validation data will be used.")
+                logger.warning(
+                    "Testing data not found! Validation data will be used.")
 
     def setup(self, stage: Optional[str] = None) -> None:
         if stage == "fit" or stage is None:
@@ -134,7 +137,7 @@ class COCODataModule(LightningDataModule):
 
         train_dataloder: DataLoader = DataLoader(
             self.train_dataset,
-            num_workers=0,
+            num_workers=self.num_workers,
             pin_memory=True,
             batch_sampler=batch_sampler,
             worker_init_fn=worker_init_reset_seed,
@@ -150,7 +153,7 @@ class COCODataModule(LightningDataModule):
             self.test_dataset,
             batch_size=self.batch_sz,
             sampler=sampler,
-            num_workers=0,
+            num_workers=self.num_workers,
             pin_memory=True,
             collate_fn=collate_fn
         )
@@ -164,7 +167,7 @@ class COCODataModule(LightningDataModule):
             self.val_dataset,
             batch_size=self.batch_sz,
             sampler=sampler,
-            num_workers=0,
+            num_workers=self.num_workers,
             pin_memory=True,
             drop_last=True,
             collate_fn=collate_fn

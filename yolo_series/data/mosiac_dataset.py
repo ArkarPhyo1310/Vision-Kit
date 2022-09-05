@@ -5,7 +5,7 @@ import cv2
 import numpy as np
 
 from yolo_series.utils import adjust_box_anns
-from yolo_series.utils.bboxes import xywh_to_cxcywh, xyxy_to_xywh
+from yolo_series.utils.bboxes import xywh_to_cxcywh, xyxy_to_xywh, xyxy_to_xywhn
 
 from .augmentations import random_affine
 from .datasets.datasets_wrapper import Dataset
@@ -18,7 +18,7 @@ class MosaicDataset(Dataset):
         self, dataset, img_size, mosaic=True, aug_pipeline=None,
         degrees=10.0, translate=0.1, mosaic_scale=(0.5, 1.5),
         mixup_scale=(0.5, 1.5), shear=2.0, enable_mixup=True,
-        mosaic_prob=1.0, mixup_prob=1.0, *args
+        mosaic_prob=1.0, mixup_prob=1.0, bbox_format="coco", *args
     ):
         """
 
@@ -47,6 +47,7 @@ class MosaicDataset(Dataset):
         self.enable_mixup = enable_mixup
         self.mosaic_prob = mosaic_prob
         self.mixup_prob = mixup_prob
+        self.bbox_format = bbox_format
 
     def __len__(self):
         return len(self._dataset)
@@ -79,15 +80,18 @@ class MosaicDataset(Dataset):
             self._dataset._input_dim = self.input_dim
             img, label, img_info, img_id = self._dataset.pull_item(idx)
 
-        label = xyxy_to_xywh(label)
-
-        # If width and height of bbox is 0, discard it.
-        label = label[label[:, 2] != 0]
-        label = label[label[:, 3] != 0]
+        if self.bbox_format == "coco":
+            label = xyxy_to_xywh(label)
+            # If width and height of bbox is 0, discard it.
+            label = label[label[:, 2] != 0]
+            label = label[label[:, 3] != 0]
+        elif self.bbox_format == "yolo":
+            label = xyxy_to_xywhn(label, w=img.shape[1], h=img.shape[0])
 
         img, label = self.aug_pipeline(img, label)
 
-        label[:, 0:4] = xywh_to_cxcywh(label[:, 0:4])
+        if self.bbox_format == "coco":
+            label[:, 0:4] = xywh_to_cxcywh(label[:, 0:4])
 
         if img_info is None:
             img_info = (img.shape[1], img.shape[0])

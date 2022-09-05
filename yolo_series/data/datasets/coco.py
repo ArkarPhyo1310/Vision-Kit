@@ -1,13 +1,18 @@
 import os
+from multiprocessing.pool import ThreadPool
 from typing import Tuple
 
 import cv2
 import numpy as np
+from loguru import logger
 from pycocotools.coco import COCO
-# from torch.utils.data import Dataset
+from rich.progress import Progress
 from yolo_series.utils import remove_useless_info
-from yolo_series.utils.bboxes import xywh_to_cxcywh, xywh_to_xyxy, xyxy_to_cxcywh, xyxy_to_xywh
+from yolo_series.utils.bboxes import xywh_to_cxcywh, xywh_to_xyxy, xyxy_to_xywh
+
 from .datasets_wrapper import Dataset
+
+NUM_THREADS = min(8, os.cpu_count())
 
 
 class COCODataset(Dataset):
@@ -59,7 +64,7 @@ class COCODataset(Dataset):
         return [self.load_anno_from_ids(idx) for idx in self.ids]
 
     def _cache_images(self):
-        print(
+        logger.info(
             "\n********************************************************************************\n"
             "You are using cached images in RAM to accelerate training.\n"
             "This requires large system RAM. For COCO need 200G+ RAM space.\n"
@@ -78,10 +83,6 @@ class COCODataset(Dataset):
                 shape=(len(self.ids), max_h, max_w, 3)
             )
 
-            from rich.progress import Progress
-            from multiprocessing.pool import ThreadPool
-
-            NUM_THREADS = min(8, os.cpu_count())
             loaded_images = ThreadPool(NUM_THREADS).imap(
                 lambda x: self.load_resized_img(x),
                 range(len(self.annotations)),
@@ -98,13 +99,13 @@ class COCODataset(Dataset):
 
             self.imgs.flush()
         else:
-            print(
+            logger.warning(
                 "You are using cached imgs! Make sure your dataset is not changed!!\n"
                 "Everytime the self.input_size is changed in your exp file, you need to delete\n"
                 "the cached data and re-generate them.\n"
             )
 
-        print("Loading cached images...")
+        logger.info("Loading cached images...")
         self.imgs = np.memmap(
             cache_file,
             shape=(len(self.ids), max_h, max_w, 3),

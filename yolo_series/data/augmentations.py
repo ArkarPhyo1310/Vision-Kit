@@ -118,6 +118,7 @@ class TrainAugPipeline:
         flip_ud_prob: float = 0.0,
         hsv_prob: float = 1.0,
         img_sz: tuple = (640, 640),
+        bbox_format: str = "coco",
     ) -> None:
 
         img_sz = (img_sz, img_sz) if isinstance(img_sz, int) else img_sz
@@ -139,7 +140,7 @@ class TrainAugPipeline:
         self.transform: A.Compose = A.Compose(
             T,
             bbox_params=A.BboxParams(
-                format="coco", label_fields=["class_labels"])
+                format=bbox_format, label_fields=["class_labels"])
         )
 
     def __call__(self, img, labels):
@@ -148,22 +149,24 @@ class TrainAugPipeline:
         )
 
         transformed_img = transformed["image"]
-        transformed_bboxes = transformed["bboxes"]
         transformed_ann = np.array(
             [
                 [*b, c] for c, b in zip(transformed["class_labels"], transformed["bboxes"])
             ]
         )
 
-        # padded_ann = np.zeros((200, 5))
-        # padded_ann[range(len(transformed_ann))[: 200]] = transformed_ann[: 200]
-        # padded_ann = np.ascontiguousarray(padded_ann, dtype=np.float32)
+        if transformed_ann.ndim < 2:
+            transformed_ann = np.zeros((1, 5))
 
         return transformed_img, transformed_ann
 
 
 class ValAugPipeline:
-    def __init__(self, img_sz: tuple = (640, 640)) -> None:
+    def __init__(
+        self,
+        img_sz: tuple = (640, 640),
+        bbox_format: str = "coco",
+    ) -> None:
 
         img_sz = (img_sz, img_sz) if isinstance(img_sz, int) else img_sz
 
@@ -174,7 +177,7 @@ class ValAugPipeline:
         self.transform: A.Compose = A.Compose(
             T,
             bbox_params=A.BboxParams(
-                format="coco", label_fields=["class_labels"])
+                format=bbox_format, label_fields=["class_labels"])
         )
 
     def __call__(self, img, labels):
