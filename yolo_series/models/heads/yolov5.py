@@ -148,7 +148,6 @@ class YOLOV5Head(nn.Module):
                 pbox = torch.cat((pxy, pwh), 1)
                 iou = bbox_overlaps(
                     pbox, tbox[idx], mode="ciou", is_aligned=True, box_format="cxcywh")
-                # iou = bbox_iou(pbox, tbox[idx], CIoU=True).squeeze()
                 loss_box += (1.0 - iou).mean()
 
                 iou = iou.detach().clamp(0).type(tobj.dtype)

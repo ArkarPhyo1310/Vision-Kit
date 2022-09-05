@@ -32,7 +32,7 @@ class CSPDarknet(nn.Module):
                 padding=2
             )
 
-        self.dark2: nn.Sequential = nn.Sequential(
+        self.stage1: nn.Sequential = nn.Sequential(
             Conv(
                 base_channels, base_channels * 2,
                 kernel=3, stride=2
@@ -44,7 +44,7 @@ class CSPDarknet(nn.Module):
             )
         )
 
-        self.dark3: nn.Sequential = nn.Sequential(
+        self.stage2: nn.Sequential = nn.Sequential(
             Conv(
                 base_channels * 2, base_channels * 4,
                 kernel=3, stride=2,
@@ -58,7 +58,7 @@ class CSPDarknet(nn.Module):
             )
         )
 
-        self.dark4: nn.Sequential = nn.Sequential(
+        self.stage3: nn.Sequential = nn.Sequential(
             Conv(
                 base_channels * 4, base_channels * 8,
                 kernel=3, stride=2,
@@ -72,7 +72,7 @@ class CSPDarknet(nn.Module):
         )
 
         if with_focus:
-            self.dark5: nn.Sequential = nn.Sequential(
+            self.stage4: nn.Sequential = nn.Sequential(
                 Conv(
                     base_channels * 8, base_channels * 16,
                     kernel=3, stride=2,
@@ -90,7 +90,7 @@ class CSPDarknet(nn.Module):
                 )
             )
         else:
-            self.dark5: nn.Sequential = nn.Sequential(
+            self.stage4: nn.Sequential = nn.Sequential(
                 Conv(
                     base_channels * 8, base_channels * 16,
                     kernel=3, stride=2,
@@ -109,9 +109,9 @@ class CSPDarknet(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         c1: torch.Tensor = self.stem(x)
-        c2: torch.Tensor = self.dark2(c1)
-        c3: torch.Tensor = self.dark3(c2)
-        c4: torch.Tensor = self.dark4(c3)
-        c5: torch.Tensor = self.dark5(c4)
+        c2: torch.Tensor = self.stage1(c1)
+        c3: torch.Tensor = self.stage2(c2)
+        c4: torch.Tensor = self.stage3(c3)
+        c5: torch.Tensor = self.stage4(c4)
 
         return c3, c4, c5
