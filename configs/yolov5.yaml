@@ -11,7 +11,7 @@ data:
   val_json: "train.json"
   test_json: null
   batch_size: 16
-  max_epochs: 20
+  max_epochs: 3
   experiment_name: "train"
 testing:
   conf_thresh: 0.001
@@ -22,11 +22,7 @@ hypermeters:
   momentum: 0.937  # SGD momentum/Adam beta1
   weight_decay: 0.0005  # optimizer weight decay 5e-4
   warmup_epochs: 3.0  # warmup epochs (fractions ok)
-  warmup_momentum: 0.8  # warmup initial momentum
   warmup_bias_lr: 0.1  # warmup initial bias lr
-  basic_lr_per_img: 0.00015625  # learning rate for one image. During training, lr will multiply batchsize.
-  min_lr_ratio: 0.05
-  no_aug_epochs: 15
   box: 0.05  # box loss gain
   cls: 0.5  # cls loss gain
   cls_pw: 1.0  # cls BCELoss positive_weight
