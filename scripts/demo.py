@@ -4,7 +4,6 @@ import torch
 from yolo_series.data.processing import ImageProcessor
 from yolo_series.models.architectures import YOLOV5
 from yolo_series.utils.general import dw_multiple_generator
-from yolo_series.utils.postprocess import nms, scale_coords
 
 width, depth = dw_multiple_generator("s")
 
@@ -19,11 +18,9 @@ dummy_input = cv2.imread("./assets/cat.jpg")
 image_processor: ImageProcessor = ImageProcessor(auto=False)
 
 x = image_processor.preprocess(dummy_input)
-# exit(0)
 with torch.no_grad():
     y = model(x)
 i = image_processor.postprocess(y[0])
-print(i)
 
 for pred in i:
     bbox = pred[:4]

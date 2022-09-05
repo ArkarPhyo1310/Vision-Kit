@@ -14,9 +14,7 @@ def convert_yolov5(version: str = "s") -> None:
 
     width, depth = dw_multiple_generator(version)
     model: YOLOV5 = YOLOV5(depth, width, training=False)
-    # model.fuse()
     model.eval()
-    # model: YOLOV5 = model.fuse()
 
     new_model: Dict[str, Any] = model.state_dict()
 
@@ -25,15 +23,12 @@ def convert_yolov5(version: str = "s") -> None:
     state_dict = modelv5.state_dict()
     state_dict.pop('model.model.24.anchors', None)
 
-    print(len(new_model.keys()))
-    print(len(state_dict.keys()))
-
     for new, old in zip(new_model.keys(), state_dict.keys()):
         new_model[new] = state_dict[old]
 
     # with torch.no_grad():
     model.load_state_dict(new_model)
-    torch.save(model.state_dict(),
+    torch.save(model.half().state_dict(),
                f"./pretrained_weights/{model_name}.pt")
 
 

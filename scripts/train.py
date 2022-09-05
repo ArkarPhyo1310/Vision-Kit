@@ -3,8 +3,8 @@ import os
 import pytorch_lightning as pl
 import torch
 from omegaconf import OmegaConf
-from yolo_series.controllers.evaluator import COCOEvaluator
-from yolo_series.controllers.trainer import TrainingModule
+from yolo_series.core.evaluator import COCOEvaluator
+from yolo_series.core.trainer import TrainingModule
 from yolo_series.data.datamodule import COCODataModule
 from yolo_series.models.architectures import build_model
 from yolo_series.utils.logging_utils import setup_logger
@@ -17,10 +17,10 @@ output_dir = os.path.join(
 
 os.makedirs(output_dir, exist_ok=True)
 
-# setup_logger(
-#     file_name="train.log",
-#     save_dir=output_dir
-# )
+setup_logger(
+    file_name="train.log",
+    save_dir=output_dir
+)
 
 datamodule = COCODataModule(
     data_dir=cfg.data.data_dir,
@@ -37,17 +37,13 @@ class_ids = datamodule.val_dataloader().dataset.class_ids
 evaluator = COCOEvaluator(img_size=(640, 640), class_ids=class_ids)
 
 weight = "./pretrained_weights/yolov5s.pt"
-# model = build_model(cfg)
-# if weight:
-#     state_dict = torch.load(weight, map_location="cpu")
-#     model = load_ckpt(model, state_dict)
 model = build_model(cfg)
 state_dict = torch.load(weight, map_location="cpu")
 model.load_state_dict(state_dict, strict=False)
 model_module = TrainingModule(cfg, model=model, evaluator=evaluator)
 trainer = pl.Trainer(
     accelerator="auto",
-    max_epochs=20,
+    max_epochs=cfg.data.max_epochs,
     num_sanity_val_steps=0,
     check_val_every_n_epoch=1
 )

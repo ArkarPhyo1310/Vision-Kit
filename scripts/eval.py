@@ -4,8 +4,8 @@ from warnings import filterwarnings
 import pytorch_lightning as pl
 import torch
 from omegaconf import OmegaConf
-from yolo_series.controllers.evaluator import COCOEvaluator
-from yolo_series.controllers.trainer import TrainingModule
+from yolo_series.core.evaluator import COCOEvaluator
+from yolo_series.core.trainer import TrainingModule
 from yolo_series.data.datamodule import COCODataModule
 from yolo_series.models.architectures import build_model
 from yolo_series.utils.logging_utils import setup_logger
