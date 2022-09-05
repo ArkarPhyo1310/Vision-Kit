@@ -1,0 +1,10 @@
+albumentations
+loguru
+numpy
+omegaconf
+pycocotools
+rich
+torch
+torchvision
+pytorch-lightning
+torchinfo
