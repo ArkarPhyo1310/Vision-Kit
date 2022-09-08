@@ -5,14 +5,14 @@ model:
   input_size: [640, 640]
   act: "silu"
 data:
-  data_format: "coco"
-  data_dir: "D:/Datasets/coco/coco128"
+  data_format: "yolo"
+  data_dir: "D:/Personal_Projects/datasets/coco128"
   output_dir: "./outputs"
-  train_path: "train.json"
-  val_path: "train.json"
+  train_path: "."
+  val_path: "."
   test_path: null
-  batch_size: 16
-  max_epochs: 3
+  batch_size: 8
+  max_epochs: 1
   experiment_name: "train"
   filter_classes: []
 testing:
