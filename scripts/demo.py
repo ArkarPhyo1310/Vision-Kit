@@ -1,9 +1,9 @@
 import cv2
 import numpy as np
 import torch
-from yolo_series.data.processing import ImageProcessor
-from yolo_series.models.architectures import YOLOV5
-from yolo_series.utils.general import dw_multiple_generator
+from vision_kit.data.processing import ImageProcessor
+from vision_kit.models.architectures import YOLOV5
+from vision_kit.utils.general import dw_multiple_generator
 
 width, depth = dw_multiple_generator("s")
 

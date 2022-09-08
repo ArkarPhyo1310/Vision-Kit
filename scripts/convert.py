@@ -2,8 +2,8 @@ from typing import Any, Dict
 
 import fire
 import torch
-from yolo_series.models.architectures.yolov5 import YOLOV5
-from yolo_series.utils.general import dw_multiple_generator
+from vision_kit.models.architectures.yolov5 import YOLOV5
+from vision_kit.utils.general import dw_multiple_generator
 
 
 def convert_yolov5(version: str = "s") -> None:

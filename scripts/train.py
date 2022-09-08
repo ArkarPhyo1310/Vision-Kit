@@ -3,33 +3,30 @@ import os
 import pytorch_lightning as pl
 import torch
 from omegaconf import OmegaConf
-from yolo_series.core.evaluator import COCOEvaluator
-from yolo_series.core.trainer import TrainingModule
-from yolo_series.data.datamodule import COCODataModule
-from yolo_series.models.architectures import build_model
-from yolo_series.utils.logging_utils import setup_logger
-from yolo_series.utils.models_utils import load_ckpt
+from vision_kit.core.eval.coco_eval import COCOEvaluator
+from vision_kit.core.train.trainer import TrainingModule
+from vision_kit.data.datamodule import LitDataModule
+from vision_kit.models.architectures import build_model
+from vision_kit.utils.logging_utils import setup_logger
+from vision_kit.utils.models_utils import load_ckpt
 
-cfg = OmegaConf.load("./configs/yolov5.yaml")
+cfg = OmegaConf.load("./configs/yolov5_yolo.yaml")
 
 output_dir = os.path.join(
     cfg.data.output_dir, cfg.data.experiment_name)
 
 os.makedirs(output_dir, exist_ok=True)
 
-setup_logger(
-    file_name="train.log",
-    save_dir=output_dir
-)
+# setup_logger(
+#     file_name="train.log",
+#     save_dir=output_dir
+# )
 
-datamodule = COCODataModule(
-    data_dir=cfg.data.data_dir,
-    train_json=cfg.data.train_json,
-    val_json=cfg.data.val_json,
-    test_json=cfg.data.test_json,
-    batch_sz=cfg.data.batch_size,
+datamodule = LitDataModule(
+    data_cfg=cfg.data,
+    aug_cfg=cfg.augmentations,
+    num_workers=0,
     img_sz=cfg.model.input_size,
-    aug_config=cfg.augmentations
 )
 datamodule.setup()
 
