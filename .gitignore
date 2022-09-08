@@ -4,3 +4,5 @@ dist/
 *.pt
 
 *.egg-info/
+
+test*
