@@ -38,7 +38,8 @@ class YOLODataset(BaseDataset):
         self.label_files = self.get_label_files(self.img_files)  # labels
         self.aug_pipeline = aug_pipeline
         self.cache_type = cache_type
-        self.class_ids = coco80_to_coco91_class()
+        # self.class_ids = coco80_to_coco91_class()
+        self.class_ids = [1, 2, 3, 4, 5, 6, 7]
 
         assert cache_type in ["ram", "storage", "none",
                               None], f"Cache Type: {cache_type} is not supported."
@@ -100,7 +101,7 @@ class YOLODataset(BaseDataset):
         classes = labels[:, 0].reshape(-1, 1)
         targets = np.hstack((bboxes, classes))
 
-        return img, targets, orig_sz, np.array([index + 1])
+        return img, targets, orig_sz, np.array([index])
 
     def load_anno(self, index: int):
         return self.labels[index]

@@ -131,12 +131,12 @@ class COCOEvaluator:
 
         annType = ["segm", "bbox", "keypoints"]
         info = ""
-        data_dict = ["s"]
         # Evaluate the Dt (detection) json comparing with the ground truth
         if len(data_dict) > 0:
             cocoGt = COCO(self.gt_json)
             _, tmp = tempfile.mkstemp()
             json.dump(data_dict, open(tmp, "w"))
+            json.dump(data_dict, open("./s.json", "w"))
             cocoDt = cocoGt.loadRes(tmp)
 
             cocoEval = COCOeval(cocoGt, cocoDt, annType[1])

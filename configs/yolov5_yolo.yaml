@@ -1,15 +1,15 @@
 model:
   name: "YOLOv5"
   version: "s"
-  num_classes: 80
+  num_classes: 7
   input_size: [640, 640]
   act: "silu"
 data:
   data_format: "yolo"
-  data_dir: "D:/Personal_Projects/datasets/coco128"
+  data_dir: "/home/arkar/Downloads/Compressed/Aquarium"
   output_dir: "./outputs"
-  train_path: "."
-  val_path: "."
+  train_path: "train/images"
+  val_path: "valid/images"
   test_path: null
   batch_size: 8
   max_epochs: 1
@@ -25,6 +25,7 @@ hypermeters:
   weight_decay: 0.0005  # optimizer weight decay 5e-4
   warmup_epochs: 3.0  # warmup epochs (fractions ok)
   warmup_bias_lr: 0.1  # warmup initial bias lr
+  warmup_momentum: 0.8 # warmup initial momentum
   box: 0.05  # box loss gain
   cls: 0.5  # cls loss gain
   cls_pw: 1.0  # cls BCELoss positive_weight

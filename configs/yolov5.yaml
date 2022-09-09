@@ -1,18 +1,18 @@
 model:
   name: "YOLOv5"
   version: "s"
-  num_classes: 80
+  num_classes: 7
   input_size: [640, 640]
   act: "silu"
 data:
   data_format: "coco"
-  data_dir: "D:/Datasets/coco/coco128"
+  data_dir: "/home/arkar/Downloads/Compressed/Aquarium_coco/"
   output_dir: "./outputs"
   train_path: "train.json"
-  val_path: "train.json"
-  test_path: null
-  batch_size: 16
-  max_epochs: 3
+  val_path: "val.json"
+  test_path: "test.json"
+  batch_size: 8
+  max_epochs: 20
   experiment_name: "train"
   filter_classes: []
 testing:

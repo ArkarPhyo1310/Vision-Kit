@@ -19,7 +19,7 @@ class LitDataModule(LightningDataModule):
         self,
         data_cfg: dict,
         aug_cfg: dict = None,
-        num_workers: int = 0,
+        num_workers: int = 8,
         img_sz: Tuple[int, int] = (640, 640),
         seed: int = None
     ) -> None:
@@ -124,7 +124,6 @@ class LitDataModule(LightningDataModule):
             num_workers=self.num_workers,
             pin_memory=True,
             batch_sampler=batch_sampler,
-            worker_init_fn=worker_init_reset_seed,
             collate_fn=collate_fn
         )
 
@@ -149,11 +148,12 @@ class LitDataModule(LightningDataModule):
 
         val_dataloader: DataLoader = DataLoader(
             self.val_dataset,
-            batch_size=32,
+            batch_size=self.batch_sz,
             sampler=sampler,
             num_workers=self.num_workers,
             pin_memory=True,
-            drop_last=True,
+            drop_last=False,
+            shuffle=False,
             collate_fn=collate_fn
         )
 

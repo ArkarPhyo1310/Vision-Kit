@@ -4,6 +4,7 @@ import torch
 from vision_kit.data.processing import ImageProcessor
 from vision_kit.models.architectures import YOLOV5
 from vision_kit.utils.general import dw_multiple_generator
+from vision_kit.utils.model_utils import intersect_dicts
 
 width, depth = dw_multiple_generator("s")
 
@@ -11,32 +12,34 @@ model: YOLOV5 = YOLOV5(dep_mul=depth, wid_mul=width, training=False)
 model.load_state_dict(torch.load(
     "./pretrained_weights/yolov5s.pt", map_location="cpu"))
 
+# state_dict = torch.load("./pretrained_weights/yolov5s.pt", map_location="cpu")
+# csd = intersect_dicts(state_dict, model.state_dict())
+# model.load_state_dict(csd, strict=False)
 model.fuse()
 model.eval()
 
 dummy_input = cv2.imread("./assets/cat.jpg")
 image_processor: ImageProcessor = ImageProcessor(auto=False)
 
-x = image_processor.preprocess(dummy_input)
+x, _ = image_processor.preprocess(dummy_input)
 with torch.no_grad():
     y = model(x)
 i = image_processor.postprocess(y[0])
+print(i)
 
 for pred in i:
     bbox = pred[:4]
     cls = pred[-1]
-    bbox = bbox.numpy()
-    cls = cls.numpy()
+    bbox = bbox.cpu().numpy()
+    cls = cls.cpu().numpy()
     (x0, y0), (x1, y1) = (int(pred[0]), int(
         pred[1])), (int(pred[2]), int(pred[3]))
     cls = int(cls)
-    from omegaconf import OmegaConf
-    COCO_CLASSES = OmegaConf.load(
-        "./configs/coco_classes.yaml")['COCO']
+    from vision_kit.classes.coco import COCO
     cv2.rectangle(
         dummy_input, (int(pred[0]), int(pred[1])), (int(pred[2]), int(pred[3])), color=(255, 0, 0), thickness=1
     )
-    text = '{}'.format(COCO_CLASSES[cls])
+    text = '{}'.format(COCO[cls])
     txt_color = (0, 0, 0) if np.mean(
         (255, 0, 0)) > 0.5 else (255, 255, 255)
     font = cv2.FONT_HERSHEY_SIMPLEX

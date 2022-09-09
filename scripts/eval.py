@@ -10,10 +10,11 @@ from vision_kit.core.train.trainer import TrainingModule
 from vision_kit.data.datamodule import LitDataModule
 from vision_kit.models.architectures import build_model
 from vision_kit.utils.logging_utils import setup_logger
+from vision_kit.utils.model_utils import load_ckpt
 
 # filterwarnings(action="ignore")
 
-cfg = OmegaConf.load("./configs/yolov5_yolo.yaml")
+cfg = OmegaConf.load("./configs/yolov5.yaml")
 
 output_dir = os.path.join(
     cfg.data.output_dir, cfg.data.experiment_name)
@@ -35,19 +36,23 @@ datamodule = LitDataModule(
 datamodule.setup()
 
 class_ids = datamodule.val_dataloader().dataset.class_ids
+# print(class_ids)
+# exit()
 
-# evaluator = COCOEvaluator(img_size=(640, 640), class_ids=class_ids)
+# evaluator = COCOEvaluator(img_size=(640, 640), class_ids=class_ids,
+#                           gt_json="/home/arkar/Downloads/Compressed/coco128.v1i.coco/val.json")
 
 evaluator = YOLOEvaluator(img_size=(640, 640))
 
 weight = "./pretrained_weights/yolov5s.pt"
 model = build_model(cfg)
 state_dict = torch.load(weight, map_location="cpu")
-model.load_state_dict(state_dict, strict=False)
+model = load_ckpt(model, state_dict)
+# model.load_state_dict(state_dict, strict=False)
 model.fuse()
 
 model_module = TrainingModule(cfg, model=model, evaluator=evaluator)
 
-trainer = pl.Trainer(num_sanity_val_steps=0)
+trainer = pl.Trainer(num_sanity_val_steps=0, accelerator="gpu")
 
 trainer.validate(model_module, datamodule=datamodule)

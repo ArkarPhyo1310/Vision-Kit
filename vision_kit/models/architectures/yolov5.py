@@ -20,6 +20,7 @@ class YOLOV5(nn.Module):
         act: str = "silu",
         hyp: dict = None,
         num_classes: int = 80,
+        device: str = "gpu",
         training: bool = True
     ) -> None:
         super(YOLOV5, self).__init__()
@@ -30,8 +31,9 @@ class YOLOV5(nn.Module):
         self.neck: PAFPN = PAFPN(
             depth_mul=dep_mul, width_mul=wid_mul, act=act
         )
+
         self.head: YOLOV5Head = YOLOV5Head(
-            num_classes, width=wid_mul, hyp=hyp, training=training)
+            num_classes, width=wid_mul, hyp=hyp, training=training, device=device)
 
         init_weights(self)
 
