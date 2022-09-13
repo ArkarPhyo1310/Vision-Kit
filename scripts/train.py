@@ -1,74 +1,55 @@
-import os
-
 import pytorch_lightning as pl
 import torch
 from omegaconf import OmegaConf
-from pytorch_lightning.callbacks import RichProgressBar
-from pytorch_lightning.callbacks.progress.rich_progress import \
-    RichProgressBarTheme
-from vision_kit.core.eval.coco_eval import COCOEvaluator
 from vision_kit.core.eval.yolo_eval import YOLOEvaluator
 from vision_kit.core.train.trainer import TrainingModule
 from vision_kit.data.datamodule import LitDataModule
 from vision_kit.models.architectures import build_model
-from vision_kit.utils.model_utils import intersect_dicts, load_ckpt
-from pytorch_lightning.plugins.precision import NativeMixedPrecisionPlugin
+from vision_kit.utils.model_utils import load_ckpt
+from vision_kit.utils.training_helpers import (get_callbacks, get_loggers,
+                                               get_profilers)
 
-cfg = OmegaConf.load("./configs/yolov5_yolo.yaml")
-pl.seed_everything(42, workers=True)
+pl.seed_everything(21, workers=True)
 
-# output_dir = os.path.join(
-#     cfg.data.output_dir, cfg.data.experiment_name)
 
-# os.makedirs(output_dir, exist_ok=True)
+def train(cfg, loggers, callbacks, profiler):
+    datamodule = LitDataModule(
+        data_cfg=cfg.data,
+        aug_cfg=cfg.augmentations,
+        num_workers=8,
+        img_sz=cfg.model.input_size,
+    )
+    datamodule.setup()
+    evaluator = YOLOEvaluator(img_size=(640, 640))
 
-progress_bar = RichProgressBar(
-    theme=RichProgressBarTheme(
-        description="green_yellow",
-        progress_bar="green1",
-        progress_bar_finished="green1",
-        progress_bar_pulse="#6206E0",
-        batch_progress="green_yellow",
-        time="grey82",
-        processing_speed="grey82",
-        metrics="grey82",
-    ),
-    leave=True
-)
+    weight = "./pretrained_weights/yolov5s.pt"
+    model = build_model(cfg)
+    state_dict = torch.load(weight, map_location="cpu")
+    model = load_ckpt(model, state_dict)
+    model = model.to("cuda")
 
-# setup_logger(
-#     file_name="train.log",
-#     save_dir=output_dir
-# )
+    model_module = TrainingModule(cfg, model=model, evaluator=evaluator)
+    trainer = pl.Trainer(
+        accelerator="auto",
+        gradient_clip_val=0.5,
+        precision=16,
+        max_epochs=cfg.data.max_epochs,
+        num_sanity_val_steps=0,
+        check_val_every_n_epoch=cfg.testing.val_interval,
+        devices="auto",
+        callbacks=list(callbacks),
+        logger=list(loggers),
+        profiler=profiler,
+    )
 
-datamodule = LitDataModule(
-    data_cfg=cfg.data,
-    aug_cfg=cfg.augmentations,
-    num_workers=8,
-    img_sz=cfg.model.input_size,
-)
-datamodule.setup()
-evaluator = YOLOEvaluator(img_size=(640, 640))
+    trainer.fit(model_module, datamodule=datamodule)
 
-weight = "./pretrained_weights/yolov5s.pt"
-model = build_model(cfg)
-state_dict = torch.load(weight, map_location="cpu")
-# model.load_state_dict(state_dict, strict=False)
-model = load_ckpt(model, state_dict)
-# state_dict = intersect_dicts(state_dict, model.state_dict())
-# model.load_state_dict(state_dict, strict=False)
-model = model.to("cuda")
 
-model_module = TrainingModule(cfg, model=model, evaluator=evaluator)
-trainer = pl.Trainer(
-    accelerator="gpu",
-    max_epochs=20,
-    num_sanity_val_steps=0,
-    check_val_every_n_epoch=1,
-    devices=1,
-    callbacks=[progress_bar],
-    gradient_clip_val=0.5,
-    precision=16
-)
+if __name__ == "__main__":
+    cfg = OmegaConf.load("./configs/yolov5_yolo.yaml")
 
-trainer.fit(model_module, datamodule=datamodule)
+    callbacks = get_callbacks(cfg.data.output_dir)
+    profiler = get_profilers(cfg.data.output_dir, filename="perf-logs")
+    loggers = get_loggers(cfg.data.output_dir)
+
+    train(cfg, loggers, callbacks, profiler)

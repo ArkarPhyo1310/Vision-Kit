@@ -18,6 +18,7 @@ data:
 testing:
   conf_thresh: 0.001
   iou_thresh: 0.6
+  val_interval: 1
 hypermeters:
   lr0: 0.01  # initial learning rate (SGD=1E-2, Adam=1E-3)
   lrf: 0.01  # final OneCycleLR learning rate (lr0 * lrf)
