@@ -5,7 +5,7 @@ import cv2
 import numpy as np
 
 from vision_kit.utils import adjust_box_anns
-from vision_kit.utils.bboxes import xywh_to_cxcywh, xyxy_to_xywh, xyxy_to_xywhn
+from vision_kit.utils.bboxes import xywh_to_cxcywh, xywhn_to_xyxy, xyxy_to_xywh, xyxy_to_xywhn
 
 from .augmentations import random_affine
 from .datasets.datasets_wrapper import Dataset
@@ -95,6 +95,17 @@ class MosaicDataset(Dataset):
 
         if img_info is None:
             img_info = (img.shape[1], img.shape[0])
+
+        # import cv2
+        # i = img
+        # if len(label) != 0:
+        #     bboxes = xywhn_to_xyxy(label[:, :4])
+        #     for bbox in bboxes:
+        #         box = list(map(int, bbox.tolist()))
+        #         cv2.rectangle(i, box[:2], box[2:], (222, 0, 0), 2)
+        #     cv2.imshow("Batch", cv2.cvtColor(i, cv2.COLOR_RGB2BGR))
+        #     cv2.waitKey(0)
+        # exit()
 
         return img, label, img_info, img_id
 

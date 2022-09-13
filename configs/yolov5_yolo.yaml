@@ -12,7 +12,7 @@ data:
   val_path: "valid/images"
   test_path: null
   batch_size: 8
-  max_epochs: 1
+  max_epochs: 20
   experiment_name: "train"
   filter_classes: []
 testing:
@@ -27,7 +27,7 @@ hypermeters:
   warmup_bias_lr: 0.1  # warmup initial bias lr
   warmup_momentum: 0.8 # warmup initial momentum
   box: 0.05  # box loss gain
-  cls: 0.5  # cls loss gain
+  cls: 0.05  # cls loss gain
   cls_pw: 1.0  # cls BCELoss positive_weight
   obj: 1.0  # obj loss gain (scale with pixels)
   obj_pw: 1.0  # obj BCELoss positive_weight
@@ -35,7 +35,7 @@ hypermeters:
   anchor_t: 4.0  # anchor-multiple threshold
   fl_gamma: 0.0  # focal loss gamma (efficientDet default gamma=1.5)
 augmentations:
-  degrees: 10.0  # image rotation (+/- deg)
+  degrees: 0.0  # image rotation (+/- deg)
   translate: 0.1  # image translation (+/- fraction)
   scale: 0.5  # image scale (+/- gain)
   shear: 2.0  # image shear (+/- deg)
@@ -45,7 +45,7 @@ augmentations:
   mosaic_prob: 1.0  # image mosaic (probability)
   mixup_prob: 1.0  # image mixup (probability)
   hsv_prob: 1.0 # image hsv (probability)
-  mosaic_scale: [0.1, 2]
+  mosaic_scale: [0.5, 1.5]
   mixup_scale: [0.5, 1.5]
-  enable_mixup: true
+  enable_mixup: false
   enable_mosaic: true

@@ -53,7 +53,7 @@ def collate_fn(batch):
             lb, np.ndarray) else padded_label
         padded_labels.append(padded_label)
 
-    return im, torch.cat(padded_labels, 0), path, shapes
+    return im, padded_labels, path, shapes
 
 
 def list_collate(batch):

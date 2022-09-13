@@ -2,9 +2,12 @@
 # -*- coding:utf-8 -*-
 
 import math
+import os
 from copy import deepcopy
+import random
 from typing import Any, Dict
 
+import numpy as np
 import torch
 from torch import nn
 
@@ -199,6 +202,21 @@ def de_parallel(model):
     return model.module if is_parallel(model) else model
 
 
+def init_seeds(seed=0, deterministic=False):
+    # Initialize random number generator (RNG) seeds https://pytorch.org/docs/stable/notes/randomness.html
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)  # for Multi-GPU, exception safe
+    torch.backends.cudnn.benchmark = True  # for faster training
+    if deterministic:  # https://github.com/ultralytics/yolov5/pull/8213
+        torch.use_deterministic_algorithms(True)
+        torch.backends.cudnn.deterministic = True
+        os.environ['CUBLAS_WORKSPACE_CONFIG'] = ':4096:8'
+        os.environ['PYTHONHASHSEED'] = str(seed)
+
+
 class ModelEMA:
     """ Updated Exponential Moving Average (EMA) from https://github.com/rwightman/pytorch-image-models
     Keeps a moving average of everything in the model state_dict (parameters and buffers)
@@ -222,7 +240,7 @@ class ModelEMA:
         for k, v in self.ema.state_dict().items():
             if v.dtype.is_floating_point:  # true for FP16 and FP32
                 v *= d
-                v += (1 - d) * msd[k].cpu().detach()
+                v += (1 - d) * msd[k].detach()
         # assert v.dtype == msd[k].dtype == torch.float32, f'{k}: EMA {v.dtype} and model {msd[k].dtype} must be FP32'
 
     def update_attr(self, model, include=(), exclude=('process_group', 'reducer')):

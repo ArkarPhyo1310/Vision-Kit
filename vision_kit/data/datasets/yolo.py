@@ -22,7 +22,7 @@ IMG_FORMATS = 'bmp', 'dng', 'jpeg', 'jpg', 'mpo', 'png', 'tif', 'tiff', 'webp'
 NUM_THREADS = min(8, os.cpu_count())
 
 
-class YOLODataset(BaseDataset):
+class YOLODataset(Dataset):
     def __init__(
         self,
         data_path: str,
@@ -39,7 +39,7 @@ class YOLODataset(BaseDataset):
         self.aug_pipeline = aug_pipeline
         self.cache_type = cache_type
         # self.class_ids = coco80_to_coco91_class()
-        self.class_ids = [1, 2, 3, 4, 5, 6, 7]
+        self.class_ids = [0, 1, 2, 3, 4, 5, 6]
 
         assert cache_type in ["ram", "storage", "none",
                               None], f"Cache Type: {cache_type} is not supported."
