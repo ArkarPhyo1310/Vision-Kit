@@ -1,11 +1,11 @@
+import os
+
 import pytorch_lightning as pl
-import torch
 from omegaconf import OmegaConf
 from vision_kit.core.eval.yolo_eval import YOLOEvaluator
 from vision_kit.core.train.trainer import TrainingModule
 from vision_kit.data.datamodule import LitDataModule
-from vision_kit.models.architectures import build_model
-from vision_kit.utils.model_utils import load_ckpt
+from vision_kit.utils.logging_utils import setup_logger
 from vision_kit.utils.training_helpers import (get_callbacks, get_loggers,
                                                get_profilers)
 
@@ -16,19 +16,18 @@ def train(cfg, loggers, callbacks, profiler):
     datamodule = LitDataModule(
         data_cfg=cfg.data,
         aug_cfg=cfg.augmentations,
-        num_workers=8,
+        num_workers=cfg.data.num_workers,
         img_sz=cfg.model.input_size,
     )
     datamodule.setup()
-    evaluator = YOLOEvaluator(img_size=(640, 640))
+    evaluator = YOLOEvaluator(
+        class_labels=cfg.data.class_labels,
+        img_size=cfg.model.input_size
+    )
 
-    weight = "./pretrained_weights/yolov5s.pt"
-    model = build_model(cfg)
-    state_dict = torch.load(weight, map_location="cpu")
-    model = load_ckpt(model, state_dict)
-    model = model.to("cuda")
+    cfg.model.weight = "./pretrained_weights/yolov5s.pt"
 
-    model_module = TrainingModule(cfg, model=model, evaluator=evaluator)
+    model_module = TrainingModule(cfg, evaluator=evaluator, pretrained=True)
     trainer = pl.Trainer(
         accelerator="auto",
         gradient_clip_val=0.5,
@@ -46,10 +45,14 @@ def train(cfg, loggers, callbacks, profiler):
 
 
 if __name__ == "__main__":
-    cfg = OmegaConf.load("./configs/yolov5_yolo.yaml")
+    cfg = OmegaConf.load("./configs/yolov5.yaml")
+
+    os.makedirs(cfg.data.output_dir, exist_ok=True)
+
+    setup_logger(cfg.data.output_dir)
 
     callbacks = get_callbacks(cfg.data.output_dir)
-    profiler = get_profilers(cfg.data.output_dir, filename="perf-logs")
+    profiler = get_profilers(cfg.data.output_dir, filename="perf-train-logs")
     loggers = get_loggers(cfg.data.output_dir)
 
     train(cfg, loggers, callbacks, profiler)

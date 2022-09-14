@@ -5,7 +5,6 @@ from typing import Tuple
 
 import cv2
 import numpy as np
-# from loguru import logger
 from pycocotools.coco import COCO
 from rich.progress import Progress
 from vision_kit.data.datasets.base import BaseDataset
@@ -13,6 +12,7 @@ from vision_kit.data.datasets.datasets_wrapper import Dataset
 from vision_kit.utils import remove_useless_info
 from vision_kit.utils.bboxes import xywh_to_cxcywh, xywh_to_xyxy, xyxy_to_xywh
 from vision_kit.utils.general import search_dir
+from vision_kit.utils.logging_utils import logger
 
 NUM_THREADS = min(8, os.cpu_count())
 
@@ -66,8 +66,8 @@ class COCODataset(BaseDataset):
         elif "test" in self.data_path.name:
             name = "test"
 
-        assert name in [
-            "train", "val", "test"], f"{self.data_path.name} does not contains \"train\", \"val\" or \"test\" in file name."
+        assert name in ["train", "val",
+                        "test"], f"{self.data_path.name} does not contains \"train\", \"val\" or \"test\" in file name."
 
         data_folder = search_dir(self.data_dir, name)
         return data_folder[0]
@@ -76,7 +76,7 @@ class COCODataset(BaseDataset):
         return [self.load_anno_from_ids(idx) for idx in self.ids]
 
     def _cache_images(self):
-        print(
+        logger.info(
             "\n********************************************************************************\n"
             "You are using cached images in RAM to accelerate training.\n"
             "This requires large system RAM. For COCO need 200G+ RAM space.\n"
@@ -111,13 +111,13 @@ class COCODataset(BaseDataset):
 
             self.imgs.flush()
         else:
-            print(
+            logger.info(
                 "You are using cached imgs! Make sure your dataset is not changed!!\n"
                 "Everytime the self.input_size is changed in your exp file, you need to delete\n"
                 "the cached data and re-generate them.\n"
             )
 
-        print("Loading cached images...")
+        logger.info("Loading cached images...")
         self.imgs = np.memmap(
             cache_file,
             shape=(len(self.ids), max_h, max_w, 3),

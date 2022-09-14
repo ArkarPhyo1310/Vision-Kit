@@ -1,0 +1,24 @@
+{
+    "os": "Linux-5.15.0-47-generic-x86_64-with-glibc2.35",
+    "python": "3.10.4",
+    "heartbeatAt": "2022-09-14T12:26:13.910600",
+    "startedAt": "2022-09-14T12:26:11.965371",
+    "docker": null,
+    "gpu": "NVIDIA GeForce GTX 1660 Ti",
+    "gpu_count": 1,
+    "cpu_count": 12,
+    "cuda": null,
+    "args": [],
+    "state": "running",
+    "program": "/home/arkar/ME/Vision-Kit/scripts/eval.py",
+    "codePath": "scripts/eval.py",
+    "git": {
+        "remote": "git@github.com:ArkarPhyo1310/Vision-Kit.git",
+        "commit": "639402770d88886d9f159173363ef8916a297f1e"
+    },
+    "email": "arkarphyo@globalwalkers.co.jp",
+    "root": "/home/arkar/ME/Vision-Kit",
+    "host": "GWM085-G7-7700",
+    "username": "arkar",
+    "executable": "/home/arkar/virtualenvs/github_env/bin/python"
+}

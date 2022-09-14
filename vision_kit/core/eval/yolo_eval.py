@@ -3,10 +3,11 @@ from typing import Tuple
 import numpy as np
 import torch
 from torchvision.ops.boxes import box_iou
-from vision_kit.utils.bboxes import cxcywh_to_xyxy, xywh_to_xyxy, xywhn_to_xyxy
-from vision_kit.utils.dataset_utils import coco80_to_coco91_class
+from vision_kit.utils.bboxes import cxcywh_to_xyxy
 from vision_kit.utils.image_proc import scale_coords
 from vision_kit.utils.metrics import smooth
+from vision_kit.utils.table import RichTable
+from vision_kit.utils.logging_utils import logger
 
 
 def ap_per_class(tp, conf, pred_cls, target_cls, eps=1e-16):
@@ -95,15 +96,13 @@ def compute_ap(recall, precision):
 class YOLOEvaluator:
     def __init__(
         self,
-        class_ids: list = None,
+        class_labels: list,
         img_size: Tuple[int, int] = (640, 640),
-        per_class_AP: bool = False,
-        per_class_AR: bool = False
+        details_per_class: bool = False
     ) -> None:
-        self.class_ids = class_ids if class_ids else coco80_to_coco91_class()
+        self.class_labels = class_labels
         self.img_sz = img_size
-        self.per_class_AP = per_class_AP
-        self.per_class_AR = per_class_AR
+        self.details_per_class = details_per_class
 
         self.precision = 0.0
         self.recall = 0.0
@@ -117,6 +116,9 @@ class YOLOEvaluator:
         self.iouv = torch.linspace(0.5, 0.95, 10)
         self.num_iou = self.iouv.numel()
         self.seen = 0
+
+        if details_per_class:
+            self.rtable = RichTable(title="Details Per Class")
 
     def evaluate(
         self, img: torch.Tensor, img_infos: list,
@@ -161,19 +163,6 @@ class YOLOEvaluator:
                 targetn = torch.cat((labels[:, 0:1], target_box), 1)
                 correct = self.process_batch(predn, targetn, self.iouv)
 
-            # import cv2
-            # import numpy as np
-            # imgn = img[idx].cpu().numpy()
-            # imgn = np.transpose(imgn, (1, 2, 0))
-            # for bbox in target_boxes:
-            #     bbox = bbox.cpu().numpy()
-            #     bbox = list(map(int, bbox.tolist()))
-            #     cv2.rectangle(
-            #         imgn, bbox[:2], bbox[2:], (255, 0, 0), 2
-            #     )
-            # cv2.imshow("S", imgn)
-            # cv2.waitKey(0)
-
             # Correct, conf, pred_cls, target_cls
             self.stats.append((correct, pred[:, 4], pred[:, 5], labels[:, 0]))
             predictions.append(predn)
@@ -183,15 +172,35 @@ class YOLOEvaluator:
 
     def evaluate_predictions(self):
         self.stats = [torch.cat(x, 0).cpu().numpy() for x in zip(*self.stats)]
-        num_classes = len(self.class_ids)
+        num_classes = len(self.class_labels)
         if len(self.stats) and self.stats[0].any():
             true_pos, false_pos, self.precision, self.recall, self.f1, ap, ap_class = ap_per_class(*self.stats)
             ap50, ap = ap[:, 0], ap.mean(1)
             self.mp, self.mr, self.map50, self.map95 = self.precision.mean(), self.recall.mean(), ap50.mean(), ap.mean()
 
+        if self.details_per_class:
+            # number of targets per class
+            num_targets = np.bincount(self.stats[3].astype(int), minlength=num_classes)
+            table_content = []
+            for i, c in enumerate(ap_class):
+                table_content.append(
+                    [
+                        str(self.class_labels[int(c)]),
+                        str(self.seen),
+                        str(num_targets[c]),
+                        str(self.precision[i]),
+                        str(self.recall[i]),
+                        str(ap50[i]),
+                        str(ap[i])
+                    ]
+                )
+            self.rtable.add_headers(["Class", "Seen", "Num_Targets", "P", "R", "mAP@.5", "mAP@.5:.95"])
+            self.rtable.add_content(table_content)
+            logger.info(f"{self.rtable.table}")
+
         return self.map50, self.map95
 
-    @staticmethod
+    @ staticmethod
     def process_batch(preds, labels, iouv):
         """
         Return correct predictions matrix. Both sets of boxes are in (x1, y1, x2, y2) format.

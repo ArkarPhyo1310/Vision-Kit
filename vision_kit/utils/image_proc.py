@@ -6,6 +6,7 @@ import numpy as np
 import torch
 import torchvision
 from vision_kit.utils.bboxes import clip_coords, cxcywh_to_xyxy
+from vision_kit.utils.logging_utils import logger
 
 
 def resize(
@@ -180,7 +181,7 @@ def nms(prediction,
 
         output[xi] = x[i]
         if (time.time() - t) > time_limit:
-            print(f'WARNING: NMS time limit {time_limit:.3f}s exceeded')
+            logger.info(f'WARNING: NMS time limit {time_limit:.3f}s exceeded')
             break  # time limit exceeded
 
     return output

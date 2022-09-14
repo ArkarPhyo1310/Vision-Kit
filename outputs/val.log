@@ -1,0 +1,37 @@
+INFO 2022-09-14 18:56:13,970 [yolo.py:__init__:58] Loaded cache labels: 448 found, 0 missing, 1 empty, 0 corrupt.
+INFO 2022-09-14 18:56:13,980 [yolo.py:__init__:58] Loaded cache labels: 127 found, 0 missing, 0 empty, 0 corrupt.
+INFO 2022-09-14 18:56:13,984 [yolo.py:__init__:58] Loaded cache labels: 63 found, 0 missing, 0 empty, 0 corrupt.
+INFO 2022-09-14 18:57:16,018 [yolo.py:__init__:58] Loaded cache labels: 448 found, 0 missing, 1 empty, 0 corrupt.
+INFO 2022-09-14 18:57:16,028 [yolo.py:__init__:58] Loaded cache labels: 127 found, 0 missing, 0 empty, 0 corrupt.
+INFO 2022-09-14 18:57:16,031 [yolo.py:__init__:58] Loaded cache labels: 63 found, 0 missing, 0 empty, 0 corrupt.
+INFO 2022-09-14 18:57:18,150 [trainer.py:on_load_checkpoint:211] Loaded average state from checkpoint.
+INFO 2022-09-14 19:00:28,701 [yolo.py:__init__:58] Loaded cache labels: 448 found, 0 missing, 1 empty, 0 corrupt.
+INFO 2022-09-14 19:00:28,710 [yolo.py:__init__:58] Loaded cache labels: 127 found, 0 missing, 0 empty, 0 corrupt.
+INFO 2022-09-14 19:00:28,714 [yolo.py:__init__:58] Loaded cache labels: 63 found, 0 missing, 0 empty, 0 corrupt.
+INFO 2022-09-14 19:00:30,835 [trainer.py:on_load_checkpoint:211] Loaded average state from checkpoint.
+INFO 2022-09-14 19:01:04,511 [yolo.py:__init__:58] Loaded cache labels: 448 found, 0 missing, 1 empty, 0 corrupt.
+INFO 2022-09-14 19:01:04,520 [yolo.py:__init__:58] Loaded cache labels: 127 found, 0 missing, 0 empty, 0 corrupt.
+INFO 2022-09-14 19:01:04,523 [yolo.py:__init__:58] Loaded cache labels: 63 found, 0 missing, 0 empty, 0 corrupt.
+INFO 2022-09-14 19:01:06,675 [trainer.py:on_load_checkpoint:211] Loaded average state from checkpoint.
+INFO 2022-09-14 19:01:49,034 [yolo.py:__init__:58] Loaded cache labels: 448 found, 0 missing, 1 empty, 0 corrupt.
+INFO 2022-09-14 19:01:49,042 [yolo.py:__init__:58] Loaded cache labels: 127 found, 0 missing, 0 empty, 0 corrupt.
+INFO 2022-09-14 19:01:49,045 [yolo.py:__init__:58] Loaded cache labels: 63 found, 0 missing, 0 empty, 0 corrupt.
+INFO 2022-09-14 19:01:51,128 [trainer.py:on_load_checkpoint:211] Loaded average state from checkpoint.
+INFO 2022-09-14 19:01:54,160 [yolo_eval.py:evaluate_predictions:199]                                                                                                                     Details Per Class                                
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┃                                                                             Class ┃                                                                               S
+┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+│ ('fish', '63', '37', '0.5434187100853767', '0.9459459459459459', '0.899367969860… │ ('shark', '63', '9', '0.6065060556051547', '0.3333333333333333', '0.49869836914
+└───────────────────────────────────────────────────────────────────────────────────┴────────────────────────────────────────────────────────────────────────────────
+INFO 2022-09-14 19:29:14,687 [yolo.py:__init__:58] Loaded cache labels: 448 found, 0 missing, 1 empty, 0 corrupt.
+INFO 2022-09-14 19:29:14,696 [yolo.py:__init__:58] Loaded cache labels: 127 found, 0 missing, 0 empty, 0 corrupt.
+INFO 2022-09-14 19:29:14,700 [yolo.py:__init__:58] Loaded cache labels: 63 found, 0 missing, 0 empty, 0 corrupt.
+INFO 2022-09-14 19:29:16,827 [trainer.py:on_load_checkpoint:211] Loaded average state from checkpoint.
+INFO 2022-09-14 19:29:19,807 [yolo_eval.py:evaluate_predictions:199]                                                    Details Per Class                                                    
+┏━━━━━━━━━━┳━━━━━━┳━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━┓
+┃    Class ┃ Seen ┃ Num_Targets ┃                  P ┃                   R ┃              mAP@.5 ┃          mAP@.5:.95 ┃
+┡━━━━━━━━━━╇━━━━━━╇━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━┩
+│     fish │   63 │          37 │ 0.5434187100853767 │  0.9459459459459459 │  0.8993679698609136 │  0.4487513213951052 │
+│    shark │   63 │           9 │ 0.6065060556051547 │  0.3333333333333333 │ 0.49869836914662047 │ 0.23533339019283955 │
+│ stingray │   63 │          13 │                1.0 │ 0.12101580333192227 │  0.6049971398110934 │ 0.39134053969610094 │
+└──────────┴──────┴─────────────┴────────────────────┴─────────────────────┴─────────────────────┴─────────────────────┘

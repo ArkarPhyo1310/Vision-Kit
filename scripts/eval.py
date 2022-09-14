@@ -2,57 +2,56 @@ import os
 from warnings import filterwarnings
 
 import pytorch_lightning as pl
-import torch
 from omegaconf import OmegaConf
-from vision_kit.core.eval.coco_eval import COCOEvaluator
 from vision_kit.core.eval.yolo_eval import YOLOEvaluator
 from vision_kit.core.train.trainer import TrainingModule
 from vision_kit.data.datamodule import LitDataModule
-from vision_kit.models.architectures import build_model
 from vision_kit.utils.logging_utils import setup_logger
-from vision_kit.utils.model_utils import load_ckpt
+from vision_kit.utils.training_helpers import get_callbacks, get_loggers, get_profilers
 
-# filterwarnings(action="ignore")
+filterwarnings(action="ignore")
 
 cfg = OmegaConf.load("./configs/yolov5.yaml")
+os.makedirs(cfg.data.output_dir, exist_ok=True)
 
-output_dir = os.path.join(
-    cfg.data.output_dir, cfg.data.experiment_name)
+setup_logger(
+    path=cfg.data.output_dir,
+    filename="val.log",
+)
 
-os.makedirs(output_dir, exist_ok=True)
-
-# setup_logger(
-#     file_name="val.log",
-#     save_dir=output_dir,
-#     mode='o'
-# )
+callbacks = get_callbacks(cfg.data.output_dir)
+profiler = get_profilers(cfg.data.output_dir, filename="perf-test-logs")
+loggers = get_loggers(cfg.data.output_dir)
 
 datamodule = LitDataModule(
     data_cfg=cfg.data,
     aug_cfg=cfg.augmentations,
-    num_workers=0,
+    num_workers=cfg.data.num_workers,
     img_sz=cfg.model.input_size,
 )
 datamodule.setup()
+evaluator = YOLOEvaluator(
+    class_labels=cfg.data.class_labels,
+    img_size=cfg.model.input_size,
+    details_per_class=True
+)
 
-class_ids = datamodule.val_dataloader().dataset.class_ids
-# print(class_ids)
-# exit()
+cfg.model.weight = "./pretrained_weights/yolov5s.pt"
+model_module = TrainingModule.load_from_checkpoint(
+    "outputs/ckpts/epoch=18-mAP@.5=0.67.ckpt", cfg=cfg, evaluator=evaluator, pretrained=True
+)
 
-# evaluator = COCOEvaluator(img_size=(640, 640), class_ids=class_ids,
-#                           gt_json="/home/arkar/Downloads/Compressed/coco128.v1i.coco/val.json")
+trainer = pl.Trainer(
+    accelerator="auto",
+    devices="auto",
+    gradient_clip_val=0.5,
+    precision=16,
+    max_epochs=cfg.data.max_epochs,
+    num_sanity_val_steps=0,
+    check_val_every_n_epoch=cfg.testing.val_interval,
+    callbacks=list(callbacks),
+    logger=list(loggers),
+    profiler=profiler
+)
 
-evaluator = YOLOEvaluator(img_size=(640, 640))
-
-weight = "./pretrained_weights/yolov5s.pt"
-model = build_model(cfg)
-state_dict = torch.load(weight, map_location="cpu")
-model = load_ckpt(model, state_dict)
-# model.load_state_dict(state_dict, strict=False)
-model.fuse()
-
-model_module = TrainingModule(cfg, model=model, evaluator=evaluator)
-
-trainer = pl.Trainer(num_sanity_val_steps=0, accelerator="gpu")
-
-trainer.validate(model_module, datamodule=datamodule)
+trainer.validate(model_module, datamodule.val_dataloader())

@@ -6,12 +6,12 @@ import tempfile
 from collections import defaultdict
 
 import numpy as np
-from loguru import logger
 from pycocotools.coco import COCO
 from pycocotools.cocoeval import COCOeval
 from tabulate import tabulate
 from vision_kit.utils.bboxes import xyxy_to_xywh
 from vision_kit.utils.image_proc import scale_coords
+from vision_kit.utils.logging_utils import logger
 
 
 def per_class_AR_table(coco_eval, class_names, headers=["class", "AR"], colums=6):

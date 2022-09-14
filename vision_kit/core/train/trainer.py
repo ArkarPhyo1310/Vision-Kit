@@ -1,4 +1,4 @@
-from typing import Any, Optional
+from typing import Any, Dict, Optional
 
 import cv2
 import numpy as np
@@ -8,13 +8,12 @@ import torchvision
 from pytorch_lightning.utilities.types import STEP_OUTPUT
 from torch import nn
 from torch.optim.lr_scheduler import LambdaLR
-from torchinfo import summary
-from vision_kit.core.eval.coco_eval import COCOEvaluator
-from vision_kit.core.eval.yolo_eval import YOLOEvaluator
-from vision_kit.models.architectures.yolov5 import YOLOV5
+from vision_kit.models.architectures import build_model
 from vision_kit.utils.bboxes import xywhn_to_xyxy
 from vision_kit.utils.image_proc import nms
-from vision_kit.utils.model_utils import ModelEMA
+from vision_kit.utils.logging_utils import logger
+from vision_kit.utils.model_utils import (ModelEMA, extract_ema_weight,
+                                          load_ckpt)
 
 
 def grid_save(imgs, targets, name="train"):
@@ -56,41 +55,21 @@ def grid_save(imgs, targets, name="train"):
     torchvision.utils.save_image(batch_grid, f"{name}.jpg")
 
 
-def smart_optimizer(model, lr=0.01, momentum=0.9, decay=1e-5):
-    # YOLOv5 3-param group optimizer: 0) weights with decay, 1) weights no decay, 2) biases no decay
-    g = [], [], []  # optimizer parameter groups
-    # normalization layers, i.e. BatchNorm2d()
-    bn = tuple(v for k, v in nn.__dict__.items() if 'Norm' in k)
-    for v in model.modules():
-        if hasattr(v, 'bias') and isinstance(v.bias, nn.Parameter):  # bias (no decay)
-            g[2].append(v.bias)
-        if isinstance(v, bn):  # weight (no decay)
-            g[1].append(v.weight)
-        elif hasattr(v, 'weight') and isinstance(v.weight, nn.Parameter):  # weight (with decay)
-            g[0].append(v.weight)
-
-    optimizer = torch.optim.SGD(g[2], lr=lr, momentum=momentum, nesterov=True)
-
-    # add g0 with weight_decay
-    optimizer.add_param_group({'params': g[0], 'weight_decay': decay})
-    # add g1 (BatchNorm2d weights)
-    optimizer.add_param_group({'params': g[1], 'weight_decay': 0.0})
-    print(f"'optimizer:' {type(optimizer).__name__}(lr={lr}) with parameter groups "
-          f"{len(g[1])} weight(decay=0.0), {len(g[0])} weight(decay={decay}), {len(g[2])} bias")
-    return optimizer
-
-
 class TrainingModule(pl.LightningModule):
-    def __init__(self, cfg, model, evaluator=None) -> None:
+    def __init__(self, cfg, evaluator=None, pretrained=True) -> None:
         super(TrainingModule, self).__init__()
+        cfg = self.update_loss_cfg(cfg)
 
-        self.model = model
-        self.evaluator = evaluator
+        if pretrained:
+            self.model = self.load_pretrained(cfg)
+        else:
+            self.model = build_model(cfg)
 
         self.hyp_cfg = cfg.hypermeters
         self.data_cfg = cfg.data
         self.test_cfg = cfg.testing
 
+        self.evaluator = evaluator
         self.ema_model = ModelEMA(self.model)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -103,7 +82,7 @@ class TrainingModule(pl.LightningModule):
         imgs /= 255.0
 
         if batch_idx == 0:
-            grid_save(imgs, targets)
+            grid_save(imgs, targets, name=f"{self.data_cfg.output_dir}/train")
 
         outputs = self.model(imgs)
         targets = torch.cat(targets, 0)
@@ -113,18 +92,19 @@ class TrainingModule(pl.LightningModule):
 
         return loss
 
-    # def training_epoch_end(self, outputs) -> None:
-    #     self.lr_scheduler.step()
-
     def validation_step(self, batch, batch_idx) -> Optional[STEP_OUTPUT]:
         imgs, targets, img_infos, idxs = batch
         imgs = torch.permute(imgs, (0, 3, 1, 2)).float()
         imgs /= 255.0
 
         if batch_idx == 0:
-            grid_save(imgs, targets, name="val")
+            grid_save(imgs, targets, name=f"{self.data_cfg.output_dir}/val")
 
-        outputs = self.eval_model(imgs)
+        if self.ema_model:
+            outputs = self.ema_model.module(imgs)
+        else:
+            outputs = self.model(imgs)
+
         output = nms(outputs[0], self.test_cfg.conf_thresh,
                      self.test_cfg.iou_thresh, multi_label=True)
 
@@ -138,15 +118,24 @@ class TrainingModule(pl.LightningModule):
         self.log("mAP@.5", map50, prog_bar=True)
         self.log("mAP@.5:.95", map95, prog_bar=True)
 
-        return {
-            "map50": map50,
-            "map95": map95
-        }
-
     def configure_optimizers(self):
-        optimizer = smart_optimizer(
-            self.model, self.hyp_cfg.lr0, self.hyp_cfg.momentum, self.hyp_cfg.momentum
-        )
+        g = [], [], []  # optimizer parameter groups
+        # normalization layers, i.e. BatchNorm2d()
+        bn = tuple(v for k, v in nn.__dict__.items() if 'Norm' in k)
+        for v in self.model.modules():
+            if hasattr(v, 'bias') and isinstance(v.bias, nn.Parameter):  # bias (no decay)
+                g[2].append(v.bias)
+            if isinstance(v, bn):  # weight (no decay)
+                g[1].append(v.weight)
+            elif hasattr(v, 'weight') and isinstance(v.weight, nn.Parameter):  # weight (with decay)
+                g[0].append(v.weight)
+
+        optimizer = torch.optim.SGD(g[2], lr=self.hyp_cfg.lr0, momentum=self.hyp_cfg.momentum, nesterov=True)
+
+        # add g0 with weight_decay
+        optimizer.add_param_group({'params': g[0], 'weight_decay': self.hyp_cfg.weight_decay})
+        # add g1 (BatchNorm2d weights)
+        optimizer.add_param_group({'params': g[1], 'weight_decay': 0.0})
 
         def lf(x): return (1 - x / self.data_cfg.max_epochs) * \
             (1.0 - self.hyp_cfg['lrf']) + self.hyp_cfg['lrf']  # linear
@@ -185,12 +174,38 @@ class TrainingModule(pl.LightningModule):
     def on_train_batch_end(self, outputs: STEP_OUTPUT, batch: Any, batch_idx: int) -> None:
         if self.ema_model:
             self.ema_model.update(self.model)
-            self.ema_model.update_attr(self.model)
 
-    def on_validation_epoch_start(self) -> None:
+    @staticmethod
+    def load_pretrained(cfg):
+        model = build_model(cfg)
+        state_dict = torch.load(cfg.model.weight, map_location="cpu")
+        model = load_ckpt(model, state_dict)
+        return model
+
+    @staticmethod
+    def update_loss_cfg(cfg):
+        nl = 3
+        cfg.hypermeters.box *= 3 / nl
+        cfg.hypermeters.cls *= cfg.model.num_classes / 80 * 3 / nl  # scale to classes and layers
+        cfg.hypermeters.obj *= (cfg.model.input_size[0] / 640) ** 2 * 3 / nl  # scale to image size and layers
+
+        return cfg
+
+    def on_save_checkpoint(self, checkpoint: Dict[str, Any]) -> None:
         if self.ema_model:
-            self.eval_model = self.ema_model.ema
+            checkpoint['model'] = self.ema_model.module.half().state_dict()
         else:
-            self.eval_model = self.model
+            checkpoint['model'] = self.model.half().state_dict()
 
-        self.eval_model.eval()
+    def on_load_checkpoint(self, checkpoint: Dict[str, Any]) -> None:
+        if self.ema_model:
+            avg_params = extract_ema_weight(checkpoint)
+            if len(avg_params) != len(self.model.state_dict()):
+                logger.info(
+                    "Weight averaging is enabled but average state does not"
+                    "match the model"
+                )
+            else:
+                self.ema_model.module.load_state_dict(avg_params)
+                self.ema_model.updates = checkpoint["epoch"]
+                logger.info("Loaded average state from checkpoint.")

@@ -7,15 +7,12 @@ from typing import Any, List, Tuple
 
 import cv2
 import numpy as np
-from loguru import logger
 from rich.progress import Progress
-from vision_kit.classes.coco import COCO
-from vision_kit.data.augmentations import TrainAugPipeline
 from vision_kit.data.datasets.base import BaseDataset
 from vision_kit.data.datasets.datasets_wrapper import Dataset
-from vision_kit.utils.bboxes import xywhn_to_xyxy, xyxy_to_cxcywh, xyxy_to_xywhn
+from vision_kit.utils.bboxes import xywhn_to_xyxy, xyxy_to_xywhn
 from vision_kit.utils.general import exif_size
-from vision_kit.utils.dataset_utils import coco80_to_coco91_class
+from vision_kit.utils.logging_utils import logger, console
 
 # include image suffixes
 IMG_FORMATS = 'bmp', 'dng', 'jpeg', 'jpg', 'mpo', 'png', 'tif', 'tiff', 'webp'
@@ -123,7 +120,7 @@ class YOLODataset(Dataset):
             cache_fn = self.cache_images_to_disk if self.cache_type == 'storage' else self.load_resized_image
             results = ThreadPool(NUM_THREADS).imap(cache_fn, range(self.total))
 
-            with Progress() as progress:
+            with Progress(console=console) as progress:
                 task = progress.add_task(
                     "[green]Caching images ...", total=len(self.total)
                 )
@@ -173,7 +170,7 @@ class YOLODataset(Dataset):
             zip(self.img_files, self.label_files),
         )
 
-        with Progress() as progress:
+        with Progress(console=console) as progress:
             task = progress.add_task(
                 "[green]Processing...", total=len(self.img_files))
 
@@ -186,11 +183,11 @@ class YOLODataset(Dataset):
                     x[img_f] = [lbl, shape]
                 progress.update(task, advance=i)
 
-            logger.warning(
+            logger.info(
                 f"{num_found} found, {num_miss} missing, {num_empty} empty, {num_corrupt} corrupt.")
 
         if num_found:
-            logger.warning(f"No labels found in {path}")
+            logger.info(f"No labels found in {path}")
 
         x['results'] = num_found, num_miss, num_empty, num_corrupt, len(
             self.img_files)

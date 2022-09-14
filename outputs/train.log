@@ -1,0 +1,5 @@
+INFO 2022-09-14 18:33:04,992 [yolo.py:__init__:58] Loaded cache labels: 448 found, 0 missing, 1 empty, 0 corrupt.
+INFO 2022-09-14 18:33:05,007 [yolo.py:__init__:58] Loaded cache labels: 127 found, 0 missing, 0 empty, 0 corrupt.
+INFO 2022-09-14 18:33:05,013 [yolo.py:__init__:58] Loaded cache labels: 63 found, 0 missing, 0 empty, 0 corrupt.
+INFO 2022-09-14 18:33:07,418 [yolo.py:__init__:58] Loaded cache labels: 448 found, 0 missing, 1 empty, 0 corrupt.
+INFO 2022-09-14 18:33:07,425 [yolo.py:__init__:58] Loaded cache labels: 127 found, 0 missing, 0 empty, 0 corrupt.
