@@ -1,4 +1,5 @@
 import os
+import logging
 from warnings import filterwarnings
 
 import pytorch_lightning as pl
@@ -19,7 +20,7 @@ setup_logger(
     filename="val.log",
 )
 
-callbacks = get_callbacks(cfg.data.output_dir)
+callbacks = get_callbacks(cfg.data.output_dir, bar_leave=False)
 profiler = get_profilers(cfg.data.output_dir, filename="perf-test-logs")
 loggers = get_loggers(cfg.data.output_dir)
 
@@ -45,7 +46,7 @@ trainer = pl.Trainer(
     accelerator="auto",
     devices="auto",
     gradient_clip_val=0.5,
-    precision=16,
+    precision=32,
     max_epochs=cfg.data.max_epochs,
     num_sanity_val_steps=0,
     check_val_every_n_epoch=cfg.testing.val_interval,

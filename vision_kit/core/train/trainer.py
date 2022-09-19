@@ -130,10 +130,12 @@ class TrainingModule(pl.LightningModule):
             elif hasattr(v, 'weight') and isinstance(v.weight, nn.Parameter):  # weight (with decay)
                 g[0].append(v.weight)
 
-        optimizer = torch.optim.SGD(g[2], lr=self.hyp_cfg.lr0, momentum=self.hyp_cfg.momentum, nesterov=True)
+        optimizer = torch.optim.SGD(
+            g[2], lr=self.hyp_cfg.lr0, momentum=self.hyp_cfg.momentum, nesterov=True)
 
         # add g0 with weight_decay
-        optimizer.add_param_group({'params': g[0], 'weight_decay': self.hyp_cfg.weight_decay})
+        optimizer.add_param_group(
+            {'params': g[0], 'weight_decay': self.hyp_cfg.weight_decay})
         # add g1 (BatchNorm2d weights)
         optimizer.add_param_group({'params': g[1], 'weight_decay': 0.0})
 
@@ -186,8 +188,10 @@ class TrainingModule(pl.LightningModule):
     def update_loss_cfg(cfg):
         nl = 3
         cfg.hypermeters.box *= 3 / nl
-        cfg.hypermeters.cls *= cfg.model.num_classes / 80 * 3 / nl  # scale to classes and layers
-        cfg.hypermeters.obj *= (cfg.model.input_size[0] / 640) ** 2 * 3 / nl  # scale to image size and layers
+        cfg.hypermeters.cls *= cfg.model.num_classes / \
+            80 * 3 / nl  # scale to classes and layers
+        # scale to image size and layers
+        cfg.hypermeters.obj *= (cfg.model.input_size[0] / 640) ** 2 * 3 / nl
 
         return cfg
 

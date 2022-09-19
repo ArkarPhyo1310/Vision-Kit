@@ -32,7 +32,8 @@ def ap_per_class(tp, conf, pred_cls, target_cls, eps=1e-16):
 
     # Create Precision-Recall curve and compute AP for each class
     px = np.linspace(0, 1, 1000)
-    ap, p, r = np.zeros((nc, tp.shape[1])), np.zeros((nc, 1000)), np.zeros((nc, 1000))
+    ap, p, r = np.zeros((nc, tp.shape[1])), np.zeros(
+        (nc, 1000)), np.zeros((nc, 1000))
     for ci, c in enumerate(unique_classes):
         i = pred_cls == c
         n_l = nt[ci]  # number of labels
@@ -46,11 +47,13 @@ def ap_per_class(tp, conf, pred_cls, target_cls, eps=1e-16):
 
         # Recall
         recall = tpc / (n_l + eps)  # recall curve
-        r[ci] = np.interp(-px, -conf[i], recall[:, 0], left=0)  # negative x, xp because xp decreases
+        # negative x, xp because xp decreases
+        r[ci] = np.interp(-px, -conf[i], recall[:, 0], left=0)
 
         # Precision
         precision = tpc / (tpc + fpc)  # precision curve
-        p[ci] = np.interp(-px, -conf[i], precision[:, 0], left=1)  # p at pr_score
+        p[ci] = np.interp(-px, -conf[i], precision[:, 0],
+                          left=1)  # p at pr_score
 
         # AP from recall-precision curve
         for j in range(tp.shape[1]):
@@ -87,7 +90,8 @@ def compute_ap(recall, precision):
         x = np.linspace(0, 1, 101)  # 101-point interp (COCO)
         ap = np.trapz(np.interp(x, mrec, mpre), x)  # integrate
     else:  # 'continuous'
-        i = np.where(mrec[1:] != mrec[:-1])[0]  # points where x axis (recall) changes
+        # points where x axis (recall) changes
+        i = np.where(mrec[1:] != mrec[:-1])[0]
         ap = np.sum((mrec[i + 1] - mrec[i]) * mpre[i + 1])  # area under curve
 
     return ap, mpre, mrec
@@ -174,29 +178,33 @@ class YOLOEvaluator:
         self.stats = [torch.cat(x, 0).cpu().numpy() for x in zip(*self.stats)]
         num_classes = len(self.class_labels)
         if len(self.stats) and self.stats[0].any():
-            true_pos, false_pos, self.precision, self.recall, self.f1, ap, ap_class = ap_per_class(*self.stats)
+            true_pos, false_pos, self.precision, self.recall, self.f1, ap, ap_class = ap_per_class(
+                *self.stats)
             ap50, ap = ap[:, 0], ap.mean(1)
-            self.mp, self.mr, self.map50, self.map95 = self.precision.mean(), self.recall.mean(), ap50.mean(), ap.mean()
+            self.mp, self.mr, self.map50, self.map95 = self.precision.mean(
+            ), self.recall.mean(), ap50.mean(), ap.mean()
 
         if self.details_per_class:
             # number of targets per class
-            num_targets = np.bincount(self.stats[3].astype(int), minlength=num_classes)
+            num_targets = np.bincount(
+                self.stats[3].astype(int), minlength=num_classes)
             table_content = []
             for i, c in enumerate(ap_class):
                 table_content.append(
                     [
-                        str(self.class_labels[int(c)]),
-                        str(self.seen),
-                        str(num_targets[c]),
-                        str(self.precision[i]),
-                        str(self.recall[i]),
-                        str(ap50[i]),
-                        str(ap[i])
+                        self.class_labels[int(c)],
+                        self.seen,
+                        num_targets[c],
+                        round(self.precision[i], 3),
+                        round(self.recall[i], 3),
+                        round(ap50[i], 3),
+                        round(ap[i], 3)
                     ]
                 )
-            self.rtable.add_headers(["Class", "Seen", "Num_Targets", "P", "R", "mAP@.5", "mAP@.5:.95"])
+            self.rtable.add_headers(
+                ["Class", "Seen", "Num_Targets", "P", "R", "mAP@.5", "mAP@.5:.95"])
             self.rtable.add_content(table_content)
-            logger.info(f"{self.rtable.table}")
+            logger.info(f"\n{self.rtable.table}")
 
         return self.map50, self.map95
 

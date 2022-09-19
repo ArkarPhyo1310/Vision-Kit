@@ -66,7 +66,7 @@ def get_profilers(dirpath: str, filename: str, name: str = "simple"):
     return profiler
 
 
-def get_callbacks(dirpath: str, monitor: str = "mAP@.5", mode: str = "max"):
+def get_callbacks(dirpath: str, monitor: str = "mAP@.5", mode: str = "max", bar_leave: bool = True):
     ckpt_filename = "{epoch}-{" + f"{monitor}" + ":.2f}"
     model_checkpointing = ModelCkpt(
         dirpath=f"{dirpath}/ckpts",
@@ -93,7 +93,7 @@ def get_callbacks(dirpath: str, monitor: str = "mAP@.5", mode: str = "max"):
             processing_speed="grey82",
             metrics="grey82",
         ),
-        leave=True
+        leave=bar_leave
     )
 
     return (model_checkpointing, early_stopping, progress_bar)
