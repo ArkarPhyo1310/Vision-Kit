@@ -12,7 +12,7 @@ from vision_kit.data.datasets.base import BaseDataset
 from vision_kit.data.datasets.datasets_wrapper import Dataset
 from vision_kit.utils.bboxes import xywhn_to_xyxy, xyxy_to_xywhn
 from vision_kit.utils.general import exif_size
-from vision_kit.utils.logging_utils import logger, console
+from vision_kit.utils.logging_utils import logger
 
 # include image suffixes
 IMG_FORMATS = 'bmp', 'dng', 'jpeg', 'jpg', 'mpo', 'png', 'tif', 'tiff', 'webp'
@@ -120,7 +120,7 @@ class YOLODataset(Dataset):
             cache_fn = self.cache_images_to_disk if self.cache_type == 'storage' else self.load_resized_image
             results = ThreadPool(NUM_THREADS).imap(cache_fn, range(self.total))
 
-            with Progress(console=console) as progress:
+            with Progress() as progress:
                 task = progress.add_task(
                     "[green]Caching images ...", total=len(self.total)
                 )
@@ -170,7 +170,7 @@ class YOLODataset(Dataset):
             zip(self.img_files, self.label_files),
         )
 
-        with Progress(console=console) as progress:
+        with Progress() as progress:
             task = progress.add_task(
                 "[green]Processing...", total=len(self.img_files))
 

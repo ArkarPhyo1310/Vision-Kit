@@ -40,19 +40,18 @@ datamodule = LitDataModule(
 datamodule.setup()
 evaluator = YOLOEvaluator(
     class_labels=cfg.data.class_labels,
-    img_size=cfg.model.input_size,
-    details_per_class=True
+    img_size=cfg.model.input_size
 )
 
 cfg.model.weight = "./pretrained_weights/yolov5s.pt"
 model_module = TrainingModule.load_from_checkpoint(
-    "outputs/YOLOv5/20220919184351/ckpts/epoch=19-mAP@.5=0.37.ckpt", cfg=cfg, evaluator=evaluator, pretrained=True
+    "outputs/YOLOv5/20220920131903/ckpts/epoch=18-mAP@.5=0.66.ckpt", cfg=cfg, evaluator=evaluator, pretrained=True
 )
 
 trainer = pl.Trainer(
     accelerator="auto",
     devices="auto",
-    gradient_clip_val=0.5,
+    gradient_clip_val=10,
     precision=16,
     max_epochs=cfg.data.max_epochs,
     num_sanity_val_steps=0,
@@ -60,7 +59,6 @@ trainer = pl.Trainer(
     callbacks=list(callbacks),
     logger=list(loggers),
     profiler=profiler,
-
 )
 
-trainer.validate(model_module, datamodule=datamodule, verbose=False)
+trainer.test(model_module, dataloaders=datamodule.test_dataloader(), verbose=False)

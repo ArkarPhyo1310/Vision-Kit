@@ -12,7 +12,7 @@ from vision_kit.data.datasets.datasets_wrapper import Dataset
 from vision_kit.utils import remove_useless_info
 from vision_kit.utils.bboxes import xywh_to_cxcywh, xywh_to_xyxy, xyxy_to_xywh
 from vision_kit.utils.general import search_dir
-from vision_kit.utils.logging_utils import logger, console
+from vision_kit.utils.logging_utils import logger
 
 NUM_THREADS = min(8, os.cpu_count())
 
@@ -100,7 +100,7 @@ class COCODataset(BaseDataset):
                 range(len(self.annotations)),
             )
 
-            with Progress(console=console) as progress:
+            with Progress() as progress:
                 task = progress.add_task(
                     "[green]Processing...", total=len(self.annotations))
 

@@ -2,16 +2,13 @@ import logging
 import os
 
 from rich.logging import RichHandler
-from rich.console import Console
-
 
 logger = logging.getLogger("VisionKit")
-console = Console()
 
 
 def setup_logger(path, filename="train.log"):
     # the handler determines where the logs go: stdout/file
-    rich_handler = RichHandler(rich_tracebacks=True, console=console)
+    rich_handler = RichHandler(rich_tracebacks=True)
     file_handler = logging.FileHandler(
         os.path.join(path, filename), encoding="utf-8")
 

@@ -101,12 +101,10 @@ class YOLOEvaluator:
     def __init__(
         self,
         class_labels: list,
-        img_size: Tuple[int, int] = (640, 640),
-        details_per_class: bool = False
+        img_size: Tuple[int, int] = (640, 640)
     ) -> None:
         self.class_labels = class_labels
         self.img_sz = img_size
-        self.details_per_class = details_per_class
 
         self.precision = 0.0
         self.recall = 0.0
@@ -121,9 +119,6 @@ class YOLOEvaluator:
         self.iouv = torch.linspace(0.5, 0.95, 10)
         self.num_iou = self.iouv.numel()
         self.seen = 0
-
-        if details_per_class:
-            self.rtable = RichTable(title="Details Per Class")
 
     def evaluate(
         self, img: torch.Tensor, img_infos: list,
@@ -174,8 +169,9 @@ class YOLOEvaluator:
 
         return torch.vstack(predictions), torch.vstack(detections)
 
-    def evaluate_predictions(self):
+    def evaluate_predictions(self, details_per_class: bool = False):
         self.stats = [torch.cat(x, 0).cpu().numpy() for x in zip(*self.stats)]
+        rtable = None
         num_classes = len(self.class_labels)
         if len(self.stats) and self.stats[0].any():
             true_pos, false_pos, self.precision, self.recall, self.f1, ap, ap_class = ap_per_class(
@@ -184,7 +180,8 @@ class YOLOEvaluator:
             self.mp, self.mr, self.map50, self.map95 = self.precision.mean(
             ), self.recall.mean(), ap50.mean(), ap.mean()
 
-        if self.details_per_class:
+        if details_per_class:
+            rtable = RichTable(title="Details Per Class")
             # number of targets per class
             num_targets = np.bincount(
                 self.stats[3].astype(int), minlength=num_classes)
@@ -202,13 +199,12 @@ class YOLOEvaluator:
                     ]
                 )
 
-            self.rtable.add_headers(
+            rtable.add_headers(
                 ["Class", "Images", "Num_Targets", "P", "R", "mAP@.5", "mAP@.5:.95"])
-            self.rtable.add_content(table_content)
-            logger.info(f"{self.rtable.table}")
+            rtable.add_content(table_content)
 
         self.stats = []
-        return self.map50, self.map95
+        return self.map50, self.map95, rtable
 
     @ staticmethod
     def process_batch(preds, labels, iouv):
