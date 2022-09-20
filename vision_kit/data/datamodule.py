@@ -1,13 +1,14 @@
 import os
 from typing import Optional, Tuple
 
+import torch
 from pytorch_lightning import LightningDataModule
 from pytorch_lightning.utilities.types import (EVAL_DATALOADERS,
                                                TRAIN_DATALOADERS)
 from torch.utils.data import DataLoader, SequentialSampler
 from vision_kit.data.augmentations import TrainAugPipeline, ValAugPipeline
 from vision_kit.data.datasets.yolo import YOLODataset
-from vision_kit.data.sampling import InfiniteSampler, YoloBatchSampler
+from vision_kit.data.sampling import InfiniteDataLoader, InfiniteSampler, YoloBatchSampler
 from vision_kit.utils.dataset_utils import collate_fn, worker_init_reset_seed
 
 from .datasets.coco import COCODataset
@@ -110,24 +111,37 @@ class LitDataModule(LightningDataModule):
                 )
 
     def train_dataloader(self) -> TRAIN_DATALOADERS:
-        sampler: InfiniteSampler = InfiniteSampler(
-            len(self.train_dataset), seed=self.seed if self.seed else 13)
-        batch_sampler: YoloBatchSampler = YoloBatchSampler(
-            sampler=sampler,
-            batch_size=self.batch_sz,
-            drop_last=False,
-            mosaic=self.aug_cfg["enable_mosaic"]
-        )
+        # sampler: InfiniteSampler = InfiniteSampler(
+        #     len(self.train_dataset), seed=self.seed if self.seed else 13)
+        generator = torch.Generator()
+        generator.manual_seed(0)
+        # batch_sampler: YoloBatchSampler = YoloBatchSampler(
+        #     sampler=sampler,
+        #     batch_size=self.batch_sz,
+        #     drop_last=False,
+        #     mosaic=self.aug_cfg["enable_mosaic"]
+        # )
 
-        train_dataloder: DataLoader = DataLoader(
+        # train_dataloader: DataLoader = DataLoader(
+        #     self.train_dataset,
+        #     num_workers=self.num_workers,
+        #     pin_memory=True,
+        #     batch_sampler=batch_sampler,
+        #     generator=generator,
+        #     collate_fn=collate_fn
+        # )
+
+        train_dataloader = InfiniteDataLoader(
             self.train_dataset,
             num_workers=self.num_workers,
             pin_memory=True,
-            batch_sampler=batch_sampler,
+            batch_size=self.batch_sz,
+            drop_last=False,
+            generator=generator,
             collate_fn=collate_fn
         )
 
-        return train_dataloder
+        return train_dataloader
 
     def test_dataloader(self) -> EVAL_DATALOADERS:
         sampler: SequentialSampler = SequentialSampler(self.test_dataset)
