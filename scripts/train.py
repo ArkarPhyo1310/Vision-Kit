@@ -3,8 +3,10 @@ import os
 import pytorch_lightning as pl
 from omegaconf import OmegaConf
 from vision_kit.core.eval.yolo_eval import YOLOEvaluator
+from vision_kit.core.eval.coco_eval import COCOEvaluator
 from vision_kit.core.train.trainer import TrainingModule
 from vision_kit.data.datamodule import LitDataModule
+from vision_kit.utils.general import mk_output_dir
 from vision_kit.utils.logging_utils import setup_logger
 from vision_kit.utils.training_helpers import (get_callbacks, get_loggers,
                                                get_profilers)
@@ -24,7 +26,6 @@ def train(cfg, loggers, callbacks, profiler):
         class_labels=cfg.data.class_labels,
         img_size=cfg.model.input_size
     )
-
     cfg.model.weight = "./pretrained_weights/yolov5s.pt"
 
     model_module = TrainingModule(cfg, evaluator=evaluator, pretrained=True)
@@ -37,7 +38,6 @@ def train(cfg, loggers, callbacks, profiler):
         check_val_every_n_epoch=cfg.testing.val_interval,
         devices="auto",
         callbacks=list(callbacks),
-        logger=list(loggers),
         profiler=profiler,
     )
 
@@ -46,13 +46,12 @@ def train(cfg, loggers, callbacks, profiler):
 
 if __name__ == "__main__":
     cfg = OmegaConf.load("./configs/yolov5.yaml")
+    output_dir = mk_output_dir(cfg.data.output_dir, cfg.model.name)
 
-    os.makedirs(cfg.data.output_dir, exist_ok=True)
+    setup_logger(output_dir)
 
-    setup_logger(cfg.data.output_dir)
-
-    callbacks = get_callbacks(cfg.data.output_dir)
-    profiler = get_profilers(cfg.data.output_dir, filename="perf-train-logs")
-    loggers = get_loggers(cfg.data.output_dir)
+    callbacks = get_callbacks(output_dir)
+    profiler = get_profilers(output_dir, filename="perf-train-logs")
+    loggers = get_loggers(output_dir)
 
     train(cfg, loggers, callbacks, profiler)

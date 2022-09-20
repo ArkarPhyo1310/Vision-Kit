@@ -4,6 +4,7 @@ model:
   num_classes: 7
   input_size: [640, 640]
   act: "silu"
+  device: "gpu"
 data:
   data_format: "yolo"
   data_dir: "/home/arkar/Downloads/Compressed/Aquarium"
@@ -41,7 +42,7 @@ augmentations:
   degrees: 0.0  # image rotation (+/- deg)
   translate: 0.1  # image translation (+/- fraction)
   scale: 0.5  # image scale (+/- gain)
-  shear: 2.0  # image shear (+/- deg)
+  shear: 0.0  # image shear (+/- deg)
   perspective: 0.0  # image perspective (+/- fraction), range 0-0.001
   flip_ud_prob: 0.0  # image flip up-down (probability)
   flip_lr_prob: 0.5  # image flip left-right (probability)

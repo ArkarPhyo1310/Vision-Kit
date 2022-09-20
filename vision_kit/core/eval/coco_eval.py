@@ -75,7 +75,7 @@ class COCOEvaluator:
 
     def __init__(
         self,
-        class_ids: list,
+        class_ids: list = [1, 2, 3, 4, 5, 6, 7],
         gt_json: str = "D:/Personal_Projects/datasets/coco128/annotations/val.json",
         img_size: int = (640, 640),
         per_class_AP: bool = False,

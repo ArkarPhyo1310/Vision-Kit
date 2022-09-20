@@ -115,6 +115,7 @@ class YOLOEvaluator:
         self.mr = 0.0
         self.map50 = 0.0
         self.map95 = 0.0
+        self.stats = []
 
         # iou vector for mAP@0.5:0.95
         self.iouv = torch.linspace(0.5, 0.95, 10)
@@ -128,7 +129,6 @@ class YOLOEvaluator:
         self, img: torch.Tensor, img_infos: list,
         preds: torch.Tensor, targets: torch.Tensor
     ):
-        self.stats = []
         # self.device = torch.device("cpu")
         self.device = targets.device
         self.iouv = self.iouv.to(self.device)
@@ -201,11 +201,13 @@ class YOLOEvaluator:
                         round(ap[i], 3)
                     ]
                 )
-            self.rtable.add_headers(
-                ["Class", "Seen", "Num_Targets", "P", "R", "mAP@.5", "mAP@.5:.95"])
-            self.rtable.add_content(table_content)
-            logger.info(f"\n{self.rtable.table}")
 
+            self.rtable.add_headers(
+                ["Class", "Images", "Num_Targets", "P", "R", "mAP@.5", "mAP@.5:.95"])
+            self.rtable.add_content(table_content)
+            logger.info(f"{self.rtable.table}")
+
+        self.stats = []
         return self.map50, self.map95
 
     @ staticmethod

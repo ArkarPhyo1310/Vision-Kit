@@ -144,8 +144,7 @@ class LitDataModule(LightningDataModule):
         return test_dataloader
 
     def val_dataloader(self) -> EVAL_DATALOADERS:
-        sampler: SequentialSampler = SequentialSampler(self.test_dataset)
-
+        sampler: SequentialSampler = SequentialSampler(self.val_dataset)
         val_dataloader: DataLoader = DataLoader(
             self.val_dataset,
             batch_size=self.batch_sz,

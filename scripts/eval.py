@@ -1,5 +1,5 @@
-import os
 import logging
+import os
 from warnings import filterwarnings
 
 import pytorch_lightning as pl
@@ -7,22 +7,29 @@ from omegaconf import OmegaConf
 from vision_kit.core.eval.yolo_eval import YOLOEvaluator
 from vision_kit.core.train.trainer import TrainingModule
 from vision_kit.data.datamodule import LitDataModule
+from vision_kit.utils.general import mk_output_dir
 from vision_kit.utils.logging_utils import setup_logger
-from vision_kit.utils.training_helpers import get_callbacks, get_loggers, get_profilers
+from vision_kit.utils.training_helpers import (get_callbacks, get_loggers,
+                                               get_profilers)
 
 filterwarnings(action="ignore")
+logging.getLogger("pytorch_lightning").setLevel(logging.ERROR)
 
 cfg = OmegaConf.load("./configs/yolov5.yaml")
-os.makedirs(cfg.data.output_dir, exist_ok=True)
+
+output_path = mk_output_dir(cfg.data.output_dir, cfg.model.name)
 
 setup_logger(
-    path=cfg.data.output_dir,
+    path=output_path,
     filename="val.log",
 )
 
-callbacks = get_callbacks(cfg.data.output_dir, bar_leave=False)
-profiler = get_profilers(cfg.data.output_dir, filename="perf-test-logs")
-loggers = get_loggers(cfg.data.output_dir)
+
+callbacks = get_callbacks(output_path, bar_leave=False)
+profiler = get_profilers(output_path, filename="perf-test-logs")
+loggers = get_loggers(output_path)
+
+# logger.info("Test")
 
 datamodule = LitDataModule(
     data_cfg=cfg.data,
@@ -39,20 +46,21 @@ evaluator = YOLOEvaluator(
 
 cfg.model.weight = "./pretrained_weights/yolov5s.pt"
 model_module = TrainingModule.load_from_checkpoint(
-    "outputs/ckpts/epoch=18-mAP@.5=0.67.ckpt", cfg=cfg, evaluator=evaluator, pretrained=True
+    "outputs/YOLOv5/20220919184351/ckpts/epoch=19-mAP@.5=0.37.ckpt", cfg=cfg, evaluator=evaluator, pretrained=True
 )
 
 trainer = pl.Trainer(
     accelerator="auto",
     devices="auto",
     gradient_clip_val=0.5,
-    precision=32,
+    precision=16,
     max_epochs=cfg.data.max_epochs,
     num_sanity_val_steps=0,
     check_val_every_n_epoch=cfg.testing.val_interval,
     callbacks=list(callbacks),
     logger=list(loggers),
-    profiler=profiler
+    profiler=profiler,
+
 )
 
-trainer.validate(model_module, datamodule.val_dataloader())
+trainer.validate(model_module, datamodule=datamodule, verbose=False)

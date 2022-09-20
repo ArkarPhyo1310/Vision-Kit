@@ -181,7 +181,7 @@ def nms(prediction,
 
         output[xi] = x[i]
         if (time.time() - t) > time_limit:
-            logger.info(f'WARNING: NMS time limit {time_limit:.3f}s exceeded')
+            logger.warning(f'WARNING: NMS time limit {time_limit:.3f}s exceeded')
             break  # time limit exceeded
 
     return output

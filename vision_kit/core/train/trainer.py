@@ -8,6 +8,7 @@ import torchvision
 from pytorch_lightning.utilities.types import STEP_OUTPUT
 from torch import nn
 from torch.optim.lr_scheduler import LambdaLR
+from torchmetrics.detection.mean_ap import MeanAveragePrecision
 from vision_kit.models.architectures import build_model
 from vision_kit.utils.bboxes import xywhn_to_xyxy
 from vision_kit.utils.image_proc import nms
@@ -59,7 +60,6 @@ class TrainingModule(pl.LightningModule):
     def __init__(self, cfg, evaluator=None, pretrained=True) -> None:
         super(TrainingModule, self).__init__()
         cfg = self.update_loss_cfg(cfg)
-
         if pretrained:
             self.model = self.load_pretrained(cfg)
         else:
@@ -72,11 +72,17 @@ class TrainingModule(pl.LightningModule):
         self.evaluator = evaluator
         self.ema_model = ModelEMA(self.model)
 
+        self.automatic_optimization = True
+        self.nbs = 64
+        self.accumulate = max(round(self.nbs / self.data_cfg.batch_size), 1)
+        self.last_opt_step = -1
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.model(x)
         return x
 
     def training_step(self, batch, batch_idx) -> STEP_OUTPUT:
+        # print("training_step")
         imgs, targets, _, _ = batch
         imgs = torch.permute(imgs, (0, 3, 1, 2)).float()
         imgs /= 255.0
@@ -84,26 +90,51 @@ class TrainingModule(pl.LightningModule):
         if batch_idx == 0:
             grid_save(imgs, targets, name=f"{self.data_cfg.output_dir}/train")
 
+        ni = self.trainer.global_step
+        # # print(ni)
+        # # print(self.nw)
+        if ni <= self.nw:
+            xi = [0, self.nw]
+            self.accumulate = max(1, np.interp(ni, xi, [1, self.nbs / self.data_cfg.batch_size]).round())
+            for j, x in enumerate(self.optimizers().param_groups):
+                x['lr'] = np.interp(ni, xi, [self.hyp_cfg['warmup_bias_lr'] if j ==
+                                             0 else 0.0, x['initial_lr'] * self.lf(self.current_epoch)])
+                if 'momentum' in x:
+                    x['momentum'] = np.interp(
+                        ni, xi, [self.hyp_cfg['warmup_momentum'], self.hyp_cfg['momentum']])
+
         outputs = self.model(imgs)
         targets = torch.cat(targets, 0)
         loss, loss_items = self.model.head.compute_loss(outputs, targets)
 
-        self.log("train_loss", loss)
+        # self.log("loss", loss)
+        # self.trainer.scaler.scale(loss).backward()
+
+        # self.manual_backward(loss)
+        # # print(self.accumulate)
+        # # exit()
+        # if ni - self.last_opt_step >= self.accumulate:
+        #     self.trainer.scaler.unscale_(self.optimizers())  # unscale gradients
+        #     torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=10.0)  # clip gradients
+        #     self.trainer.scaler.step(self.optimizers())  # optimizer.step
+        #     self.trainer.scaler.update()
+        #     self.optimizers().zero_grad()
+        #     self.last_opt_step = ni
 
         return loss
 
     def validation_step(self, batch, batch_idx) -> Optional[STEP_OUTPUT]:
         imgs, targets, img_infos, idxs = batch
-        imgs = torch.permute(imgs, (0, 3, 1, 2)).float()
+        imgs = torch.permute(imgs, (0, 3, 1, 2)).half()
         imgs /= 255.0
 
-        if batch_idx == 0:
-            grid_save(imgs, targets, name=f"{self.data_cfg.output_dir}/val")
+        # if batch_idx == 0:
+        #     grid_save(imgs, targets, name=f"{self.data_cfg.output_dir}/val")
 
         if self.ema_model:
-            outputs = self.ema_model.module(imgs)
+            outputs = self.ema_model.module.half()(imgs)
         else:
-            outputs = self.model(imgs)
+            outputs = self.model.half()(imgs)
 
         output = nms(outputs[0], self.test_cfg.conf_thresh,
                      self.test_cfg.iou_thresh, multi_label=True)
@@ -113,7 +144,7 @@ class TrainingModule(pl.LightningModule):
             img=imgs, img_infos=img_infos, preds=output, targets=targets
         )
 
-    def validation_epoch_end(self, outputs) -> None:
+    def validation_epoch_end(self, outpus) -> None:
         map50, map95 = self.evaluator.evaluate_predictions()
         self.log("mAP@.5", map50, prog_bar=True)
         self.log("mAP@.5:.95", map95, prog_bar=True)
@@ -139,43 +170,65 @@ class TrainingModule(pl.LightningModule):
         # add g1 (BatchNorm2d weights)
         optimizer.add_param_group({'params': g[1], 'weight_decay': 0.0})
 
-        def lf(x): return (1 - x / self.data_cfg.max_epochs) * \
-            (1.0 - self.hyp_cfg['lrf']) + self.hyp_cfg['lrf']  # linear
-        lr_scheduler = LambdaLR(optimizer, lr_lambda=lf)
+        # def lf(x): return (1 - x / self.data_cfg.max_epochs) * \
+        #     (1.0 - self.hyp_cfg['lrf']) + self.hyp_cfg['lrf']  # linear
+        self.lr_scheduler = LambdaLR(optimizer, lr_lambda=self.lf)
 
-        return [optimizer], [lr_scheduler]
+        return optimizer
 
-    def optimizer_step(
-        self,
-        epoch,
-        batch_idx,
-        optimizer,
-        optimizer_idx=0,
-        optimizer_closure=None,
-        on_tpu=False,
-        using_native_amp=True,
-        using_lbfgs=False
-    ) -> None:
-        def lf(x): return (1 - x / self.data_cfg.max_epochs) * \
-            (1.0 - self.hyp_cfg['lrf']) + self.hyp_cfg['lrf']  # linear
-        nw = self.trainer.num_training_batches
-        ni = self.trainer.global_step
-        if ni <= nw:
-            xi = [0, nw]
-            for j, x in enumerate(optimizer.param_groups):
-                x['lr'] = np.interp(ni, xi, [self.hyp_cfg['warmup_bias_lr'] if j ==
-                                    0 else 0.0, x['initial_lr'] * lf(epoch)])
-                if 'momentum' in x:
-                    x['momentum'] = np.interp(
-                        ni, xi, [self.hyp_cfg['warmup_momentum'], self.hyp_cfg['momentum']])
+    def lf(self, x): return (1 - x / self.data_cfg.max_epochs) * \
+        (1.0 - self.hyp_cfg['lrf']) + self.hyp_cfg['lrf']  # linear
 
-        # update params
-        optimizer.step(closure=optimizer_closure)
-        optimizer.zero_grad()
+    # def optimizer_step(
+    #     self,
+    #     epoch,
+    #     batch_idx,
+    #     optimizer,
+    #     optimizer_idx,
+    #     optimizer_closure=None,
+    #     on_tpu=False,
+    #     using_native_amp=True,
+    #     using_lbfgs=False
+    # ) -> None:
+    #     # def lf(x): return (1 - x / self.data_cfg.max_epochs) * \
+    #     #     (1.0 - self.hyp_cfg['lrf']) + self.hyp_cfg['lrf']  # linear
+    #     # ni = self.trainer.global_step
+    #     # if ni <= self.nw:
+    #     #     xi = [0, self.nw]
+    #     #     self.accumulate = max(1, np.interp(ni, xi, [1, self.nbs / self.data_cfg.batch_size]).round())
+    #     #     for j, x in enumerate(optimizer.param_groups):
+    #     #         x['lr'] = np.interp(ni, xi, [self.hyp_cfg['warmup_bias_lr'] if j ==
+    #     #                                      0 else 0.0, x['initial_lr'] * self.lf(epoch)])
+    #     #         if 'momentum' in x:
+    #     #             x['momentum'] = np.interp(
+    #     #                 ni, xi, [self.hyp_cfg['warmup_momentum'], self.hyp_cfg['momentum']])
+
+    #     # update params
+    #     # if (ni - self.last_opt_step) >= self.accumulate:
+    #     #     print("HERE")
+    #     #     self.last_opt_step = ni
+    #     print(optimizer_closure.__dir__)
+    #     exit()
+    #     optimizer.step(closure=optimizer_closure)
+    #     optimizer.zero_grad()
 
     def on_train_batch_end(self, outputs: STEP_OUTPUT, batch: Any, batch_idx: int) -> None:
+        # print("on_train_batch_end")
         if self.ema_model:
             self.ema_model.update(self.model)
+
+    def on_train_epoch_end(self) -> None:
+        # return super().on_train_epoch_end()
+        self.lr_scheduler.step()
+
+    def on_train_epoch_start(self) -> None:
+        # return super().on_train_epoch_start()
+        self.optimizers().zero_grad()
+
+    def on_train_start(self) -> None:
+        # return super().on_train_start()
+        self.lr_scheduler.last_epoch = -1
+        self.nw = max(round(self.hyp_cfg['warmup_epochs'] * self.trainer.num_training_batches), 100)
 
     @staticmethod
     def load_pretrained(cfg):

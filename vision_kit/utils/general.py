@@ -1,6 +1,7 @@
 import contextlib
 import os
 from typing import List, Tuple
+from datetime import datetime
 
 from PIL import ExifTags
 
@@ -26,6 +27,14 @@ def search_dir(path: str, set_type: str = "train") -> List[str]:
     if len(dir_list) == 0:
         return dir_list
     return list(filter(lambda x: set_type in x, dir_list))
+
+
+def mk_output_dir(path: str, model_name: str):
+    ct_format = datetime.now().strftime('%Y%m%d%H%M%S')
+    output_path = os.path.join(path, model_name, ct_format)
+    os.makedirs(output_path, exist_ok=True)
+
+    return output_path
 
 
 def dw_multiple_generator(version: str = "s") -> Tuple[float, float]:
