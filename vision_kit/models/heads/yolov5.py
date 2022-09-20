@@ -3,7 +3,7 @@ from typing import List, Tuple
 
 import torch
 from torch import nn
-from vision_kit.utils.bboxes import bbox_overlaps
+from vision_kit.utils.bboxes import bbox_iou, bbox_overlaps
 from vision_kit.utils.loss_utils import smooth_BCE
 from vision_kit.utils.model_utils import check_anchor_order, meshgrid
 
@@ -146,8 +146,9 @@ class YOLOV5Head(nn.Module):
                 pxy = pxy.sigmoid() * 2 - 0.5
                 pwh = (pwh.sigmoid() * 2) ** 2 * anchs[idx]
                 pbox = torch.cat((pxy, pwh), 1)
-                iou = bbox_overlaps(
-                    pbox, tbox[idx], mode="ciou", is_aligned=True, box_format="cxcywh")
+                # iou = bbox_overlaps(
+                #     pbox, tbox[idx], mode="ciou", is_aligned=True, box_format="cxcywh")
+                iou = bbox_iou(pbox, tbox[idx], CIoU=True).squeeze()
                 loss_box += (1.0 - iou).mean()
 
                 iou = iou.detach().clamp(0).type(tobj.dtype)

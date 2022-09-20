@@ -1,7 +1,7 @@
 import torch
 from torch import nn
 
-from loguru import logger
+# from loguru import logger
 
 from vision_kit.models.backbones import CSPDarknet
 from vision_kit.models.necks import PAFPN
@@ -45,7 +45,8 @@ class YOLOV5(nn.Module):
         return x
 
     def fuse(self):
-        logger.info("Fusing Layers...")
+        print("Fusing Layers...")
+        # logger.info("Fusing Layers...")
         for module in [self.backbone, self.neck, self.head]:
             for m in module.modules():
                 if type(m) is ConvBnAct and hasattr(m, "bn"):

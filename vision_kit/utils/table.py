@@ -133,6 +133,8 @@ class RichTable:
         if not isinstance(data, list):
             logger.error(
                 f"Content must be 2-D list. [['a', 'b'], ['c', 'd']]", exc_info=1)
+            # print(
+            #     f"Content must be 2-D list. [['a', 'b'], ['c', 'd']]")
         data = data if isinstance(data[0], list) else [data]
 
         for row in data:

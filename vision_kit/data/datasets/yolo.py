@@ -187,7 +187,7 @@ class YOLODataset(Dataset):
                 f"{num_found} found, {num_miss} missing, {num_empty} empty, {num_corrupt} corrupt.")
 
         if num_found:
-            logger.info(f"No labels found in {path}")
+            logger.warning(f"No labels found in {path}")
 
         x['results'] = num_found, num_miss, num_empty, num_corrupt, len(
             self.img_files)
