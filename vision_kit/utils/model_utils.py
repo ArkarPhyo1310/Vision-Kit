@@ -170,6 +170,22 @@ def extract_ema_weight(checkpoint: Dict[str, Any]) -> Dict[str, Any]:
     return avg_weights
 
 
+def remove_ema_weight(checkpoint: Dict[str, Any]) -> Dict[str, Any]:
+    """Converts average state dict to the format that can be loaded to a model.
+    Args:
+        checkpoint: model.
+    Returns:
+        Converted average state dict.
+    """
+    state_dict = checkpoint["state_dict"]
+    model_weights = {}
+    for k, v in state_dict.items():
+        if "ema_model" in k:
+            continue
+        model_weights[k] = v
+    return model_weights
+
+
 class ModelEMA(nn.Module):
     """ Model Exponential Moving Average V2
     Model Exponential Moving Average from https://github.com/rwightman/pytorch-image-models

@@ -21,7 +21,7 @@ def main(cfg, loggers, callbacks, profiler, task):
         num_workers=cfg.data.num_workers,
         img_sz=cfg.model.input_size,
     )
-    datamodule.setup()
+    # datamodule.setup()
     evaluator = YOLOEvaluator(
         class_labels=cfg.data.class_labels,
         img_size=cfg.model.input_size
@@ -29,7 +29,7 @@ def main(cfg, loggers, callbacks, profiler, task):
     cfg.model.weight = "./pretrained_weights/yolov5s.pt"
 
     trainer = pl.Trainer(
-        accelerator="auto",
+        accelerator="gpu",
         gradient_clip_val=10,
         precision=16,
         max_epochs=cfg.data.max_epochs,
@@ -49,9 +49,10 @@ def main(cfg, loggers, callbacks, profiler, task):
         trainer.test(model_module, datamodule=datamodule, verbose=False)
     else:
         model_module = TrainingModule.load_from_checkpoint(
-            "outputs/YOLOv5/20220920131903/ckpts/epoch=18-mAP@.5=0.66.ckpt", cfg=cfg, evaluator=evaluator,
-            pretrained=True, task=task)
+            "outputs/YOLOv5/20220921123538/ckpts/epoch=0-mAP@.5=0.02.ckpt", cfg=cfg, evaluator=evaluator,
+            pretrained=True)
         trainer.test(model_module, datamodule=datamodule, verbose=False)
+    model_module.to_torchscript("test1.pt", method="trace", strict=False)
 
 
 if __name__ == "__main__":

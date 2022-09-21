@@ -1,4 +1,6 @@
-from typing import Any, Dict, Optional
+from copy import deepcopy
+from pathlib import Path
+from typing import Any, Dict, Optional, Union
 
 import numpy as np
 import pytorch_lightning as pl
@@ -6,15 +8,15 @@ import torch
 from pytorch_lightning.utilities.types import STEP_OUTPUT
 from torch import nn
 from torch.optim.lr_scheduler import LambdaLR
+from torchinfo import summary
 from torchmetrics.detection.mean_ap import MeanAveragePrecision
 from vision_kit.models.architectures import build_model
 from vision_kit.utils.drawing import grid_save
 from vision_kit.utils.image_proc import nms
 from vision_kit.utils.logging_utils import logger
 from vision_kit.utils.model_utils import (ModelEMA, extract_ema_weight,
-                                          load_ckpt)
+                                          load_ckpt, remove_ema_weight)
 from vision_kit.utils.table import RichTable
-from torchinfo import summary
 
 
 class TrainingModule(pl.LightningModule):
@@ -62,11 +64,7 @@ class TrainingModule(pl.LightningModule):
         if batch_idx == 0:
             grid_save(imgs, targets, name=f"{self.data_cfg.output_dir}/val")
 
-        if self.ema_model:
-            outputs = self.ema_model.module(imgs)
-        else:
-            outputs = self.model(imgs)
-
+        outputs = self.get_model()(imgs)
         output = nms(outputs[0], self.test_cfg.conf_thresh,
                      self.test_cfg.iou_thresh, multi_label=True)
 
@@ -83,11 +81,7 @@ class TrainingModule(pl.LightningModule):
         if batch_idx == 0:
             grid_save(imgs, targets, name=f"{self.data_cfg.output_dir}/test")
 
-        if self.ema_model:
-            outputs = self.ema_model.module(imgs)
-        else:
-            outputs = self.model(imgs)
-
+        outputs = self.get_model()(imgs)
         output = nms(outputs[0], self.test_cfg.conf_thresh,
                      self.test_cfg.iou_thresh, multi_label=True)
 
@@ -117,9 +111,6 @@ class TrainingModule(pl.LightningModule):
         if self.ema_model:
             self.ema_model.update(self.model)
 
-    def training_epoch_end(self, outputs) -> None:
-        self.lr_scheduler.step()
-
     def validation_epoch_end(self, outputs) -> None:
         map50, map95, _ = self.evaluator.evaluate_predictions()
         self.log("mAP@.5", map50, prog_bar=True)
@@ -128,6 +119,8 @@ class TrainingModule(pl.LightningModule):
     def test_epoch_end(self, outputs) -> None:
         logger.info("Testing finished...")
         map50, map95, self.per_class_table = self.evaluator.evaluate_predictions(details_per_class=True)
+        logger.info(self.per_class_table.table)
+
         results = self.metrics_mAP.compute()
 
         mAP_res = []
@@ -152,8 +145,6 @@ class TrainingModule(pl.LightningModule):
         mAR_res.append(round(results["mar_large"].detach().item(), 3))
         self.mAR_table.add_content([mAR_res])
 
-    def on_test_end(self) -> None:
-        logger.info(self.per_class_table.table)
         logger.info(self.mAP_table.table)
         logger.info(self.mAR_table.table)
 
@@ -180,9 +171,9 @@ class TrainingModule(pl.LightningModule):
 
         def lf(x): return (1 - x / self.data_cfg.max_epochs) * \
             (1.0 - self.hyp_cfg['lrf']) + self.hyp_cfg['lrf']  # linear
-        self.lr_scheduler = LambdaLR(optimizer, lr_lambda=lf)
+        lr_scheduler = LambdaLR(optimizer, lr_lambda=lf)
 
-        return optimizer
+        return [optimizer], [lr_scheduler]
 
     def optimizer_step(
         self,
@@ -216,14 +207,11 @@ class TrainingModule(pl.LightningModule):
         # optimizer.zero_grad()
 
     def on_train_start(self) -> None:
-        self.lr_scheduler.last_epoch = -1
+        # self.lr_scheduler.last_epoch = -1
         self.nw = max(round(self.hyp_cfg['warmup_epochs'] * self.trainer.num_training_batches), 100)
 
     def on_save_checkpoint(self, checkpoint: Dict[str, Any]) -> None:
-        if self.ema_model:
-            checkpoint['model'] = self.ema_model.module.half().state_dict()
-        else:
-            checkpoint['model'] = self.model.half().state_dict()
+        checkpoint["model"] = self.get_model(half=True).state_dict()
 
     def on_load_checkpoint(self, checkpoint: Dict[str, Any]) -> None:
         if self.ema_model:
@@ -237,6 +225,55 @@ class TrainingModule(pl.LightningModule):
                 self.ema_model.module.load_state_dict(avg_params)
                 self.ema_model.updates = checkpoint["epoch"]
                 logger.info("Loaded average state from checkpoint.")
+        else:
+            checkpoint["state_dict"] = remove_ema_weight(checkpoint)
+
+    @torch.no_grad()
+    def to_torchscript(self, file_path: Optional[Union[str, Path]] = None, method: Optional[str] = "script",
+                       example_inputs: Optional[Any] = None, **kwargs):
+        script_model = self.get_model()
+
+        script_model.head.export = True
+        script_model.fuse()
+        script_model.eval()
+
+        logger.info(f'Starting export with torch {torch.__version__}...')
+        if method == "script":
+            ts = torch.jit.script(script_model, **kwargs)
+        elif method == "trace":
+            # if no example inputs are provided, try to see if model has example_input_array set
+            if example_inputs is None:
+                if self.example_input_array is None:
+                    raise ValueError(
+                        "Choosing method=`trace` requires either `example_inputs`"
+                        " or `model.example_input_array` to be defined."
+                    )
+                example_inputs: torch.Tensor = self.example_input_array
+
+            example_inputs = example_inputs.to(self.device)
+            script_model = script_model.to(self.device)
+            ts = torch.jit.trace(script_model, example_inputs=example_inputs, **kwargs)
+        else:
+            raise ValueError(f"The 'method' parameter only supports 'script' or 'trace', but value given was: {method}")
+
+        ts.save(file_path)
+        logger.info(f'Saved torchscript model @ {file_path}...')
+
+    def to_onnx(self, file_path: Union[str, Path], input_sample: Optional[Any] = None, **kwargs):
+        return super().to_onnx(file_path, input_sample, **kwargs)
+
+    def get_model(self, half: bool = False):
+        if self.ema_model:
+            tmp_model = self.ema_model.module
+        else:
+            tmp_model = self.model
+        model = deepcopy(tmp_model)
+        if half:
+            model.half()
+
+        del tmp_model
+
+        return model
 
     @staticmethod
     def load_pretrained(cfg):

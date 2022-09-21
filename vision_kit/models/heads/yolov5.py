@@ -19,7 +19,7 @@ class YOLOV5Head(nn.Module):
         hyp: dict = None,
         device: str = "gpu",
         inplace: bool = True,
-        onnx_export: bool = False,
+        export: bool = False,
         training: bool = True
     ) -> None:
         super(YOLOV5Head, self).__init__()
@@ -54,7 +54,7 @@ class YOLOV5Head(nn.Module):
         )
 
         self.inplace: bool = inplace
-        self.onnx_export: bool = onnx_export
+        self.export: bool = export
 
         # loss
         if training:
@@ -90,7 +90,7 @@ class YOLOV5Head(nn.Module):
                              nx).permute(0, 1, 3, 4, 2).contiguous()
 
             if not self.training:
-                if self.onnx_export or self.grid[i].shape[2:4] != x[i].shape[2:4]:
+                if self.export or self.grid[i].shape[2:4] != x[i].shape[2:4]:
                     self.grid[i], self.anchor_grid[i] = self._make_grid(
                         nx, ny, i)
 
@@ -108,7 +108,7 @@ class YOLOV5Head(nn.Module):
                     y = torch.cat((xy, wh, conf), 4)
                 z.append(y.view(bs, -1, self.no))
 
-        return x if self.training else (torch.cat(z, 1), ) if self.onnx_export else (torch.cat(z, 1), x)
+        return x if self.training else (torch.cat(z, 1), ) if self.export else (torch.cat(z, 1), x)
 
     def _make_grid(self, nx=20, ny=20, i=0) -> Tuple[torch.Tensor, torch.Tensor]:
         d: torch.device = self.anchors[i].device

@@ -124,7 +124,6 @@ class YOLOEvaluator:
         self, img: torch.Tensor, img_infos: list,
         preds: torch.Tensor, targets: torch.Tensor
     ):
-        # self.device = torch.device("cpu")
         self.device = targets.device
         self.iouv = self.iouv.to(self.device)
         b, c, h, w = img.shape
@@ -204,6 +203,7 @@ class YOLOEvaluator:
             rtable.add_content(table_content)
 
         self.stats = []
+        self.seen = 0
         return self.map50, self.map95, rtable
 
     @ staticmethod

@@ -1,9 +1,9 @@
-from typing import List
+from typing import List, Tuple
 
 import torch
 from torch import nn
 from vision_kit.models.modules.blocks import (SPP, SPPF, ConvBnAct,
-                                               DWConvModule, Focus)
+                                              DWConvModule, Focus)
 from vision_kit.models.modules.bottlenecks import C3Bottleneck
 
 
@@ -107,7 +107,7 @@ class CSPDarknet(nn.Module):
                 )
             )
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         c1: torch.Tensor = self.stem(x)
         c2: torch.Tensor = self.stage1(c1)
         c3: torch.Tensor = self.stage2(c2)
