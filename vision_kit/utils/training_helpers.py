@@ -5,7 +5,7 @@ from typing import Any, Dict, Optional, Union
 import pytorch_lightning as pl
 import torch
 from pytorch_lightning.callbacks import (EarlyStopping, ModelCheckpoint,
-                                         RichProgressBar)
+                                         RichProgressBar, LearningRateMonitor)
 from pytorch_lightning.callbacks.progress.rich_progress import \
     RichProgressBarTheme
 from pytorch_lightning.loggers import TensorBoardLogger, WandbLogger
@@ -39,7 +39,9 @@ class ModelCkpt(ModelCheckpoint):
     def on_train_end(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
         score = round(self.best_model_score.detach().cpu().item(), 2)
         best_ckpt = torch.load(self.best_model_path, map_location="cpu")
-        save_path = os.path.join(self.dirpath, f'best-map50_{score}.pt')
+        output_dir = self.dirpath.replace("ckpts", "weights")
+        os.makedirs(output_dir, exist_ok=True)
+        save_path = os.path.join(output_dir, f'best-map50_{score}.pt')
         torch.save(best_ckpt["model"], save_path)
 
 
@@ -67,10 +69,10 @@ def get_profilers(dirpath: str, filename: str, name: str = "simple"):
 
 
 def get_callbacks(dirpath: str, monitor: str = "mAP@.5", mode: str = "max", bar_leave: bool = True):
-    ckpt_filename = "{epoch}-{" + f"{monitor}" + ":.2f}"
+    # ckpt_filename = "{epoch}-{" + f"{monitor}" + ":.2f}"
     model_checkpointing = ModelCkpt(
         dirpath=f"{dirpath}/ckpts",
-        filename=ckpt_filename,
+        filename="best",
         monitor=monitor,
         save_last=True,
         mode=mode
@@ -96,7 +98,11 @@ def get_callbacks(dirpath: str, monitor: str = "mAP@.5", mode: str = "max", bar_
         leave=bar_leave
     )
 
-    return (model_checkpointing, early_stopping, progress_bar)
+    lr_monitor = LearningRateMonitor(
+        logging_interval="epoch"
+    )
+
+    return (model_checkpointing, early_stopping, progress_bar, lr_monitor)
 
 
 def get_loggers(dirpath):
@@ -107,7 +113,7 @@ def get_loggers(dirpath):
 
     wandb_logger = WandbLogger(
         project="VisionKit",
-        save_dir=dirpath
+        save_dir=dirpath,
     )
 
     return (tb_logger, wandb_logger)

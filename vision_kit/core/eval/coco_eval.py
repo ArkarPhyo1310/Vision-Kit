@@ -62,8 +62,6 @@ def per_class_AP_table(coco_eval, class_names, headers=["class", "AP"], colums=6
         row_pair, tablefmt="pipe", floatfmt=".3f", headers=table_headers, numalign="left",
     )
 
-    from rich import table
-
     return table
 
 
@@ -136,7 +134,6 @@ class COCOEvaluator:
             cocoGt = COCO(self.gt_json)
             _, tmp = tempfile.mkstemp()
             json.dump(data_dict, open(tmp, "w"))
-            json.dump(data_dict, open("./s.json", "w"))
             cocoDt = cocoGt.loadRes(tmp)
 
             cocoEval = COCOeval(cocoGt, cocoDt, annType[1])

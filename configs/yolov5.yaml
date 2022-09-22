@@ -13,7 +13,7 @@ data:
   val_path: "valid/images"
   test_path: "test/images"
   batch_size: 8
-  max_epochs: 20
+  max_epochs: 25
   num_workers: 8
   filter_classes: []
   class_labels: ['fish', 'jellyfish', 'penguin', 'puffin', 'shark', 'starfish', 'stingray']

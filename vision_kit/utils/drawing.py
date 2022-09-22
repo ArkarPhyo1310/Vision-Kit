@@ -42,3 +42,5 @@ def grid_save(imgs, targets, name="train"):
     batch_grid = torchvision.utils.make_grid(
         img_tensor, normalize=False, nrow=row)
     torchvision.utils.save_image(batch_grid, f"{name}.jpg")
+
+    return batch_grid

@@ -5,6 +5,7 @@ from typing import Any, Dict, Optional, Union
 import numpy as np
 import pytorch_lightning as pl
 import torch
+import wandb
 from pytorch_lightning.utilities.types import STEP_OUTPUT
 from torch import nn
 from torch.optim.lr_scheduler import LambdaLR
@@ -17,6 +18,7 @@ from vision_kit.utils.logging_utils import logger
 from vision_kit.utils.model_utils import (ModelEMA, extract_ema_weight,
                                           load_ckpt, remove_ema_weight)
 from vision_kit.utils.table import RichTable
+from pytorch_lightning.loggers import WandbLogger, TensorBoardLogger
 
 
 class TrainingModule(pl.LightningModule):
@@ -48,7 +50,7 @@ class TrainingModule(pl.LightningModule):
         imgs /= 255.0
 
         if batch_idx == 0:
-            grid_save(imgs, targets, name=f"{self.data_cfg.output_dir}/train")
+            self.train_batch_grid = grid_save(imgs, targets, name=f"{self.data_cfg.output_dir}/train")
 
         outputs = self.model(imgs)
         targets = torch.cat(targets, 0)
@@ -62,7 +64,7 @@ class TrainingModule(pl.LightningModule):
         imgs /= 255.0
 
         if batch_idx == 0:
-            grid_save(imgs, targets, name=f"{self.data_cfg.output_dir}/val")
+            self.val_batch_grid = grid_save(imgs, targets, name=f"{self.data_cfg.output_dir}/val")
 
         outputs = self.get_model()(imgs)
         output = nms(outputs[0], self.test_cfg.conf_thresh,
@@ -79,7 +81,7 @@ class TrainingModule(pl.LightningModule):
         imgs /= 255.0
 
         if batch_idx == 0:
-            grid_save(imgs, targets, name=f"{self.data_cfg.output_dir}/test")
+            self.test_batch_grid = grid_save(imgs, targets, name=f"{self.data_cfg.output_dir}/test")
 
         outputs = self.get_model()(imgs)
         output = nms(outputs[0], self.test_cfg.conf_thresh,
@@ -111,12 +113,38 @@ class TrainingModule(pl.LightningModule):
         if self.ema_model:
             self.ema_model.update(self.model)
 
+    def training_epoch_end(self, outputs) -> None:
+        self.log("loss", outputs[0])
+        for logger in self.loggers:
+            if isinstance(logger, WandbLogger):
+                logger.experiment.log({
+                    "samples/train": [wandb.Image(f"{self.data_cfg.output_dir}/train.jpg")]
+                })
+            elif isinstance(logger, TensorBoardLogger):
+                logger.experiment.add_image('samples/train', self.train_batch_grid, 0)
+
     def validation_epoch_end(self, outputs) -> None:
         map50, map95, _ = self.evaluator.evaluate_predictions()
         self.log("mAP@.5", map50, prog_bar=True)
         self.log("mAP@.5:.95", map95, prog_bar=True)
 
+        for logger in self.loggers:
+            if isinstance(logger, WandbLogger):
+                logger.experiment.log({
+                    "samples/val": [wandb.Image(f"{self.data_cfg.output_dir}/val.jpg")]
+                })
+            elif isinstance(logger, TensorBoardLogger):
+                logger.experiment.add_image('samples/val', self.val_batch_grid, 0)
+
     def test_epoch_end(self, outputs) -> None:
+        for trainer_logger in self.loggers:
+            if isinstance(trainer_logger, WandbLogger):
+                trainer_logger.experiment.log({
+                    "samples/test": [wandb.Image(f"{self.data_cfg.output_dir}/test.jpg")]
+                })
+            elif isinstance(trainer_logger, TensorBoardLogger):
+                trainer_logger.experiment.add_image('samples/test', self.test_batch_grid, 0)
+
         logger.info("Testing finished...")
         map50, map95, self.per_class_table = self.evaluator.evaluate_predictions(details_per_class=True)
         logger.info(self.per_class_table.table)
@@ -204,7 +232,6 @@ class TrainingModule(pl.LightningModule):
 
         # update params
         optimizer.step(closure=optimizer_closure)
-        # optimizer.zero_grad()
 
     def on_train_start(self) -> None:
         # self.lr_scheduler.last_epoch = -1
@@ -257,10 +284,51 @@ class TrainingModule(pl.LightningModule):
             raise ValueError(f"The 'method' parameter only supports 'script' or 'trace', but value given was: {method}")
 
         ts.save(file_path)
-        logger.info(f'Saved torchscript model @ {file_path}...')
+        logger.info(f'Saved torchscript model @ {file_path}')
 
-    def to_onnx(self, file_path: Union[str, Path], input_sample: Optional[Any] = None, **kwargs):
-        return super().to_onnx(file_path, input_sample, **kwargs)
+    @torch.no_grad()
+    def to_onnx(
+            self, file_path: Union[str, Path],
+            input_sample: Optional[Any] = None, simplify: bool = True, **kwargs):
+        import onnx
+
+        model = self.get_model()
+        model.head.export = True
+        model.fuse()
+        model.eval()
+
+        if input_sample is None:
+            if self.example_input_array is None:
+                raise ValueError(
+                    "Onnx conversion requires either `input_sample`"
+                    " or `model.example_input_array` to be defined."
+                )
+            input_sample: torch.Tensor = self.example_input_array
+        input_sample = input_sample.cpu()
+        model = model.cpu()
+
+        torch.onnx.export(
+            model,
+            input_sample,
+            file_path,
+            **kwargs
+        )
+        # Checks
+        model_onnx = onnx.load(file_path)  # load onnx model
+        onnx.checker.check_model(model_onnx)  # check onnx model
+
+        # Simplify
+        if simplify:
+            try:
+                import onnxsim
+
+                logger.info(f'Simplifying with onnx-simplifier {onnxsim.__version__}...')
+                model_onnx, check = onnxsim.simplify(model_onnx)
+                assert check, 'assert check failed'
+                onnx.save(model_onnx, file_path)
+            except Exception as e:
+                logger.info(f'Simplifier failure: {e}')
+        logger.info(f'Saved onnx model @ {file_path}')
 
     def get_model(self, half: bool = False):
         if self.ema_model:
