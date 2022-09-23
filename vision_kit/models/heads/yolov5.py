@@ -4,7 +4,7 @@ from typing import List, Tuple
 import torch
 from torch import nn
 from vision_kit.utils.bboxes import bbox_iou, bbox_overlaps
-from vision_kit.utils.loss_utils import smooth_BCE
+from vision_kit.utils.metrics import smooth_BCE
 from vision_kit.utils.model_utils import check_anchor_order, meshgrid
 
 

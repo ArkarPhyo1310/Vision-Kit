@@ -8,9 +8,9 @@ from vision_kit.utils.model_utils import intersect_dicts
 
 width, depth = dw_multiple_generator("s")
 
-model: YOLOV5 = YOLOV5(dep_mul=depth, wid_mul=width, training=False)
+model: YOLOV5 = YOLOV5(dep_mul=depth, wid_mul=width, training=False, num_classes=7)
 model.load_state_dict(torch.load(
-    "./pretrained_weights/yolov5s.pt", map_location="cpu"))
+    "outputs/YOLOv5/20220923142146/weights/best-map50_0.7.pt", map_location="cpu"), strict=False)
 
 # state_dict = torch.load("./pretrained_weights/yolov5s.pt", map_location="cpu")
 # csd = intersect_dicts(state_dict, model.state_dict())
@@ -18,7 +18,7 @@ model.load_state_dict(torch.load(
 model.fuse()
 model.eval()
 
-dummy_input = cv2.imread("./assets/cat.jpg")
+dummy_input = cv2.imread("./assets/fish.jpg")
 image_processor: ImageProcessor = ImageProcessor(auto=False)
 
 x, _ = image_processor.preprocess(dummy_input)
@@ -26,6 +26,7 @@ with torch.no_grad():
     y = model(x)
 i = image_processor.postprocess(y[0])
 print(i)
+classes_labels = ['fish', 'jellyfish', 'penguin', 'puffin', 'shark', 'starfish', 'stingray']
 
 for pred in i:
     bbox = pred[:4]
@@ -35,11 +36,10 @@ for pred in i:
     (x0, y0), (x1, y1) = (int(pred[0]), int(
         pred[1])), (int(pred[2]), int(pred[3]))
     cls = int(cls)
-    from vision_kit.classes.coco import COCO
     cv2.rectangle(
         dummy_input, (int(pred[0]), int(pred[1])), (int(pred[2]), int(pred[3])), color=(255, 0, 0), thickness=1
     )
-    text = '{}'.format(COCO[cls])
+    text = '{}'.format(classes_labels[cls])
     txt_color = (0, 0, 0) if np.mean(
         (255, 0, 0)) > 0.5 else (255, 255, 255)
     font = cv2.FONT_HERSHEY_SIMPLEX

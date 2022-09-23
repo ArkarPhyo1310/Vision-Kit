@@ -4,8 +4,8 @@ from typing import Any, Dict, Optional, Union
 
 import pytorch_lightning as pl
 import torch
-from pytorch_lightning.callbacks import (EarlyStopping, ModelCheckpoint,
-                                         RichProgressBar, LearningRateMonitor)
+from pytorch_lightning.callbacks import (EarlyStopping, LearningRateMonitor,
+                                         ModelCheckpoint, RichProgressBar)
 from pytorch_lightning.callbacks.progress.rich_progress import \
     RichProgressBarTheme
 from pytorch_lightning.loggers import TensorBoardLogger, WandbLogger

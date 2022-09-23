@@ -67,8 +67,7 @@ def per_class_AP_table(coco_eval, class_names, headers=["class", "AP"], colums=6
 
 class COCOEvaluator:
     """
-    COCO AP Evaluation class.  All the data in the val2017 dataset are processed
-    and evaluated by COCO API.
+    COCO AP Evaluation class. evaluated by COCO API.
     """
 
     def __init__(
@@ -85,9 +84,8 @@ class COCOEvaluator:
         self.class_ids = class_ids
         self.gt_json = gt_json
 
-    def convert_to_coco(self, outputs, img_infos, ids):
+    def evaluate(self, outputs, img_infos, ids):
         data_list = []
-        image_wise_data = defaultdict(dict)
         for (output, img_info, img_id) in zip(outputs, img_infos, ids):
             if output is None:
                 continue
@@ -97,17 +95,6 @@ class COCOEvaluator:
             bboxes = output[:, 0:4]
             scores = output[:, 4]
             cls = output[:, 5]
-
-            image_wise_data.update({
-                int(img_id): {
-                    "bboxes": [box.numpy().tolist() for box in bboxes],
-                    "scores": [score.numpy().item() for score in scores],
-                    "categories": [
-                        self.class_ids[int(cls[ind])]
-                        for ind in range(bboxes.shape[0])
-                    ],
-                }
-            })
 
             bboxes = xyxy_to_xywh(bboxes)
 
@@ -122,7 +109,7 @@ class COCOEvaluator:
                 }  # COCO json format
                 data_list.append(pred_data)
 
-        return data_list, image_wise_data
+        return data_list
 
     def evaluate_prediction(self, data_dict):
         logger.info("Evaluate in main process...")

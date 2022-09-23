@@ -3,7 +3,7 @@ from typing import Tuple
 import numpy as np
 import torch
 from torchvision.ops.boxes import box_iou
-from vision_kit.utils.bboxes import cxcywh_to_xyxy
+from vision_kit.utils.bboxes import cxcywh_to_xyxy, xyxy_to_xywh
 from vision_kit.utils.image_proc import scale_coords
 from vision_kit.utils.metrics import smooth
 from vision_kit.utils.table import RichTable
@@ -105,6 +105,7 @@ class YOLOEvaluator:
     ) -> None:
         self.class_labels = class_labels
         self.img_sz = img_size
+        self.class_ids = [i + 1 for i in range(len(self.class_labels))]
 
         self.precision = 0.0
         self.recall = 0.0
@@ -119,11 +120,13 @@ class YOLOEvaluator:
         self.iouv = torch.linspace(0.5, 0.95, 10)
         self.num_iou = self.iouv.numel()
         self.seen = 0
+        self.data_dict = []
 
     def evaluate(
-        self, img: torch.Tensor, img_infos: list,
+        self, img: torch.Tensor, img_infos: list, idxs: list,
         preds: torch.Tensor, targets: torch.Tensor
     ):
+        data_list = []
         self.device = targets.device
         self.iouv = self.iouv.to(self.device)
         b, c, h, w = img.shape
@@ -137,6 +140,7 @@ class YOLOEvaluator:
             labels = targets[targets[:, 0] == idx, 1:]
             num_lbl, num_pred = labels.shape[0], pred.shape[0]
             img_orig_shape = img_infos[idx]
+            img_id = idxs[idx]
             correct = torch.zeros(num_pred, self.num_iou,
                                   dtype=torch.bool, device=self.device)
 
@@ -163,9 +167,29 @@ class YOLOEvaluator:
 
             # Correct, conf, pred_cls, target_cls
             self.stats.append((correct, pred[:, 4], pred[:, 5], labels[:, 0]))
+
+            # For COCO evaluation
+            pred_output = predn.cpu()
+            bboxes = pred_output[:, 0:4]
+            scores = pred_output[:, 4]
+            cls = pred_output[:, 5]
+            bboxes = xyxy_to_xywh(bboxes)
+
+            for ind in range(bboxes.shape[0]):
+                label = self.class_ids[int(cls[ind])]
+                pred_data = {
+                    "image_id": int(img_id),
+                    "category_id": label,
+                    "bbox": bboxes[ind].numpy().tolist(),
+                    "score": scores[ind].numpy().item(),
+                    "segmentation": [],
+                }  # COCO json format
+                data_list.append(pred_data)
+
             predictions.append(predn)
             detections.append(targetn)
 
+        self.data_dict.append(data_list)
         return torch.vstack(predictions), torch.vstack(detections)
 
     def evaluate_predictions(self, details_per_class: bool = False):
@@ -205,6 +229,36 @@ class YOLOEvaluator:
         self.stats = []
         self.seen = 0
         return self.map50, self.map95, rtable
+
+    def coco_evaluate(self, gt_json: str):
+        import tempfile
+        import contextlib
+        import io
+        import json
+
+        from pycocotools.coco import COCO
+        from pycocotools.cocoeval import COCOeval
+
+        logger.info("Performing COCO evaluation...")
+
+        annType = ["segm", "bbox", "keypoints"]
+        info = ""
+        # Evaluate the Dt (detection) json comparing with the ground truth
+        if len(self.data_dict) > 0:
+            cocoGt = COCO(gt_json)
+            _, tmp = tempfile.mkstemp()
+            json.dump(self.data_dict, open(tmp, "w"))
+            cocoDt = cocoGt.loadRes(tmp)
+
+            cocoEval = COCOeval(cocoGt, cocoDt, annType[1])
+            cocoEval.evaluate()
+            cocoEval.accumulate()
+            redirect_string = io.StringIO()
+            with contextlib.redirect_stdout(redirect_string):
+                cocoEval.summarize()
+            info = redirect_string.getvalue()
+
+        logger.info(info)
 
     @ staticmethod
     def process_batch(preds, labels, iouv):

@@ -38,7 +38,7 @@ class TrainingModule(pl.LightningModule):
 
         self.evaluator = evaluator
         self.ema_model = ModelEMA(self.model)
-        self.metrics_mAP = MeanAveragePrecision()
+        self.metrics_mAP = MeanAveragePrecision(compute_on_cpu=True)
 
         self.example_input_array = torch.ones((1, 3, *(cfg.model.input_size)))
         model_info = summary(self.model, input_size=self.example_input_array.shape, verbose=0, depth=2)
@@ -284,7 +284,7 @@ class TrainingModule(pl.LightningModule):
             raise ValueError(f"The 'method' parameter only supports 'script' or 'trace', but value given was: {method}")
 
         ts.save(file_path)
-        logger.info(f'Saved torchscript model @ {file_path}')
+        logger.info(f'Saved torchscript model at: {file_path}')
 
     @torch.no_grad()
     def to_onnx(
@@ -328,7 +328,7 @@ class TrainingModule(pl.LightningModule):
                 onnx.save(model_onnx, file_path)
             except Exception as e:
                 logger.info(f'Simplifier failure: {e}')
-        logger.info(f'Saved onnx model @ {file_path}')
+        logger.info(f'Saved onnx model at: {file_path}')
 
     def get_model(self, half: bool = False):
         if self.ema_model:

@@ -1,6 +1,7 @@
 import argparse
 import logging
 import os
+import warnings
 
 import pytorch_lightning as pl
 from omegaconf import OmegaConf
@@ -8,10 +9,10 @@ from vision_kit.core.eval.yolo_eval import YOLOEvaluator
 from vision_kit.core.train.trainer import TrainingModule
 from vision_kit.data.datamodule import LitDataModule
 from vision_kit.utils.general import mk_output_dir
-from vision_kit.utils.logging_utils import setup_logger, logger
+from vision_kit.utils.logging_utils import logger, setup_logger
 from vision_kit.utils.training_helpers import (get_callbacks, get_loggers,
                                                get_profilers)
-
+warnings.filterwarnings(action="ignore")
 logging.getLogger("pytorch_lightning").setLevel(logging.ERROR)
 
 
@@ -19,7 +20,7 @@ def main(cfg, opt):
 
     callbacks = get_callbacks(cfg.data.output_dir, bar_leave=True)
     profiler = get_profilers(cfg.data.output_dir, filename="perf-logs")
-    loggers = get_loggers(cfg.data.output_dir)
+    loggers = get_loggers(cfg.data.output_dir) if opt.task == "train" else ()
 
     datamodule = LitDataModule(
         data_cfg=cfg.data,
@@ -58,35 +59,38 @@ def main(cfg, opt):
     if opt.task == "train":
         trainer.fit(model_module, datamodule=datamodule, ckpt_path=ckpt_path)
         trainer.test(model_module, datamodule=datamodule, verbose=False)
-    else:
+    elif opt.task == "eval":
         trainer.test(model_module, datamodule=datamodule, verbose=False, ckpt_path=ckpt_path)
+    else:
+        if ckpt_path:
+            model_module = TrainingModule.load_from_checkpoint(
+                checkpoint_path=ckpt_path, cfg=cfg, evaluator=evaluator, pretrained=True)
+        file_name = f"{cfg.model.name.lower()}_{cfg.model.version}"
+        save_path = os.path.join(cfg.data.output_dir, "weights")
+        os.makedirs(save_path, exist_ok=True)
 
-    file_name = f"{cfg.model.name.lower()}_{cfg.model.version}"
-    save_path = os.path.join(cfg.data.output_dir, "weights")
-    os.makedirs(save_path, exist_ok=True)
-
-    model_module.to_onnx(
-        os.path.join(save_path, file_name + ".onnx"),
-        opset_version=13,
-        input_names=['images'],
-        output_names=['output'],
-        dynamic_axes={
-            'images': {
-                0: 'batch',
-                2: 'height',
-                3: 'width'},  # shape(1,3,640,640)
-            'output': {
-                0: 'batch',
-                1: 'anchors'}  # shape(1,25200,85)
-        }
-    )
-    model_module.to_torchscript(os.path.join(save_path, file_name + ".tspt"), method="trace", strict=False)
+        model_module.to_onnx(
+            os.path.join(save_path, file_name + ".onnx"),
+            opset_version=13,
+            input_names=['images'],
+            output_names=['output'],
+            dynamic_axes={
+                'images': {
+                    0: 'batch',
+                    2: 'height',
+                    3: 'width'},  # shape(1,3,640,640)
+                'output': {
+                    0: 'batch',
+                    1: 'anchors'}  # shape(1,25200,85)
+            }
+        )
+        model_module.to_torchscript(os.path.join(save_path, file_name + ".tspt"), method="trace", strict=False)
 
 
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="YOLOv5 Training with Pytorch Lightning")
-    parser.add_argument("task", type=str, choices=["train", "eval"],
+    parser.add_argument("task", type=str, choices=["train", "eval", "export"],
                         default="train", help="Please specify task to perform")
     parser.add_argument("--config", "-c", type=str,
                         default="./configs/yolov5.yaml", help="Model/Dataset config file")
@@ -99,7 +103,7 @@ if __name__ == "__main__":
 
     cfg = OmegaConf.load(opt.config)
     output_dir = mk_output_dir(cfg.data.output_dir, cfg.model.name)
-    setup_logger(output_dir)
+    setup_logger(output_dir, filename="log.log")
     cfg.data.output_dir = output_dir
 
     logger.info(f"Global seed set to {opt.seed}")
