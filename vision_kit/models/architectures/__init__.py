@@ -13,7 +13,8 @@ def build_model(cfg: DictConfig):
             dep_mul=depth,
             act=cfg.model.act,
             num_classes=cfg.model.num_classes,
-            hyp=cfg.hypermeters
+            hyp=cfg.hypermeters,
+            device=cfg.model.device
         )
     else:
         raise NotImplemented

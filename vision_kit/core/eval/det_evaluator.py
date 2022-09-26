@@ -3,10 +3,10 @@ from typing import Tuple
 import numpy as np
 import torch
 from torchvision.ops.boxes import box_iou
-from vision_kit.utils.bboxes import cxcywh_to_xyxy, xywh_to_xyxy, xywhn_to_xyxy
-from vision_kit.utils.dataset_utils import coco80_to_coco91_class
+from vision_kit.utils.bboxes import cxcywh_to_xyxy, xyxy_to_xywh
 from vision_kit.utils.image_proc import scale_coords
 from vision_kit.utils.metrics import smooth
+from vision_kit.utils.table import RichTable
 
 
 def ap_per_class(tp, conf, pred_cls, target_cls, eps=1e-16):
@@ -31,7 +31,8 @@ def ap_per_class(tp, conf, pred_cls, target_cls, eps=1e-16):
 
     # Create Precision-Recall curve and compute AP for each class
     px = np.linspace(0, 1, 1000)
-    ap, p, r = np.zeros((nc, tp.shape[1])), np.zeros((nc, 1000)), np.zeros((nc, 1000))
+    ap, p, r = np.zeros((nc, tp.shape[1])), np.zeros(
+        (nc, 1000)), np.zeros((nc, 1000))
     for ci, c in enumerate(unique_classes):
         i = pred_cls == c
         n_l = nt[ci]  # number of labels
@@ -45,11 +46,13 @@ def ap_per_class(tp, conf, pred_cls, target_cls, eps=1e-16):
 
         # Recall
         recall = tpc / (n_l + eps)  # recall curve
-        r[ci] = np.interp(-px, -conf[i], recall[:, 0], left=0)  # negative x, xp because xp decreases
+        # negative x, xp because xp decreases
+        r[ci] = np.interp(-px, -conf[i], recall[:, 0], left=0)
 
         # Precision
         precision = tpc / (tpc + fpc)  # precision curve
-        p[ci] = np.interp(-px, -conf[i], precision[:, 0], left=1)  # p at pr_score
+        p[ci] = np.interp(-px, -conf[i], precision[:, 0],
+                          left=1)  # p at pr_score
 
         # AP from recall-precision curve
         for j in range(tp.shape[1]):
@@ -86,24 +89,26 @@ def compute_ap(recall, precision):
         x = np.linspace(0, 1, 101)  # 101-point interp (COCO)
         ap = np.trapz(np.interp(x, mrec, mpre), x)  # integrate
     else:  # 'continuous'
-        i = np.where(mrec[1:] != mrec[:-1])[0]  # points where x axis (recall) changes
+        # points where x axis (recall) changes
+        i = np.where(mrec[1:] != mrec[:-1])[0]
         ap = np.sum((mrec[i + 1] - mrec[i]) * mpre[i + 1])  # area under curve
 
     return ap, mpre, mrec
 
 
-class YOLOEvaluator:
+class DetEvaluator:
     def __init__(
         self,
-        class_ids: list = None,
+        class_labels: list,
         img_size: Tuple[int, int] = (640, 640),
-        per_class_AP: bool = False,
-        per_class_AR: bool = False
+        gt_json: str = None,
+        label_format: str = "yolo"
     ) -> None:
-        self.class_ids = class_ids if class_ids else coco80_to_coco91_class()
+        self.class_labels = class_labels
         self.img_sz = img_size
-        self.per_class_AP = per_class_AP
-        self.per_class_AR = per_class_AR
+        self.class_ids = [i + 1 for i in range(len(self.class_labels))]
+        self.gt_json = gt_json
+        self.label_format = label_format
 
         self.precision = 0.0
         self.recall = 0.0
@@ -112,22 +117,23 @@ class YOLOEvaluator:
         self.mr = 0.0
         self.map50 = 0.0
         self.map95 = 0.0
+        self.stats = []
 
         # iou vector for mAP@0.5:0.95
         self.iouv = torch.linspace(0.5, 0.95, 10)
         self.num_iou = self.iouv.numel()
         self.seen = 0
+        self.coco_data = []
 
     def evaluate(
-        self, img: torch.Tensor, img_infos: list,
+        self, img: torch.Tensor, img_infos: list, idxs: list,
         preds: torch.Tensor, targets: torch.Tensor
     ):
-        self.stats = []
-        # self.device = torch.device("cpu")
         self.device = targets.device
         self.iouv = self.iouv.to(self.device)
         b, c, h, w = img.shape
-        targets[:, 2:] *= torch.tensor((w, h, w, h), device=self.device)
+        if self.label_format == "yolo":
+            targets[:, 2:] *= torch.tensor((w, h, w, h), device=self.device)
 
         predictions = []
         detections = []
@@ -137,6 +143,7 @@ class YOLOEvaluator:
             labels = targets[targets[:, 0] == idx, 1:]
             num_lbl, num_pred = labels.shape[0], pred.shape[0]
             img_orig_shape = img_infos[idx]
+            img_id = idxs[idx]
             correct = torch.zeros(num_pred, self.num_iou,
                                   dtype=torch.bool, device=self.device)
 
@@ -161,35 +168,106 @@ class YOLOEvaluator:
                 targetn = torch.cat((labels[:, 0:1], target_box), 1)
                 correct = self.process_batch(predn, targetn, self.iouv)
 
-            # import cv2
-            # import numpy as np
-            # imgn = img[idx].cpu().numpy()
-            # imgn = np.transpose(imgn, (1, 2, 0))
-            # for bbox in target_boxes:
-            #     bbox = bbox.cpu().numpy()
-            #     bbox = list(map(int, bbox.tolist()))
-            #     cv2.rectangle(
-            #         imgn, bbox[:2], bbox[2:], (255, 0, 0), 2
-            #     )
-            # cv2.imshow("S", imgn)
-            # cv2.waitKey(0)
-
             # Correct, conf, pred_cls, target_cls
             self.stats.append((correct, pred[:, 4], pred[:, 5], labels[:, 0]))
+
+            if self.gt_json is not None:
+                # For COCO evaluation
+                self.convert_to_coco(predn, img_id)
+
             predictions.append(predn)
             detections.append(targetn)
 
         return torch.vstack(predictions), torch.vstack(detections)
 
-    def evaluate_predictions(self):
+    def summarize(self, details_per_class: bool = False, do_coco_eval: bool = False):
         self.stats = [torch.cat(x, 0).cpu().numpy() for x in zip(*self.stats)]
-        num_classes = len(self.class_ids)
+        rtable = None
+        coco_eval_info = None
+        num_classes = len(self.class_labels)
         if len(self.stats) and self.stats[0].any():
-            true_pos, false_pos, self.precision, self.recall, self.f1, ap, ap_class = ap_per_class(*self.stats)
+            true_pos, false_pos, self.precision, self.recall, self.f1, ap, ap_class = ap_per_class(
+                *self.stats)
             ap50, ap = ap[:, 0], ap.mean(1)
-            self.mp, self.mr, self.map50, self.map95 = self.precision.mean(), self.recall.mean(), ap50.mean(), ap.mean()
+            self.mp, self.mr, self.map50, self.map95 = self.precision.mean(
+            ), self.recall.mean(), ap50.mean(), ap.mean()
 
-        return self.map50, self.map95
+        if details_per_class:
+            rtable = RichTable(title="Details Per Class")
+            # number of targets per class
+            num_targets = np.bincount(
+                self.stats[3].astype(int), minlength=num_classes)
+            table_content = []
+            for i, c in enumerate(ap_class):
+                table_content.append(
+                    [
+                        self.class_labels[int(c)],
+                        self.seen,
+                        num_targets[c],
+                        round(self.precision[i], 3),
+                        round(self.recall[i], 3),
+                        round(ap50[i], 3),
+                        round(ap[i], 3)
+                    ]
+                )
+
+            rtable.add_headers(
+                ["Class", "Images", "Num_Targets", "Precision", "Recall", "mAP@.5", "mAP@.5:.95"])
+            rtable.add_content(table_content)
+
+        if self.gt_json is not None and do_coco_eval:
+            coco_eval_info = self.coco_evaluate()
+
+        self.seen = 0
+        self.stats.clear()
+        self.coco_data.clear()
+
+        return self.map50, self.map95, rtable, coco_eval_info
+
+    def convert_to_coco(self, pred, img_id):
+        pred_output = pred.cpu()
+        bboxes = pred_output[:, 0:4]
+        scores = pred_output[:, 4]
+        cls = pred_output[:, 5]
+        bboxes = xyxy_to_xywh(bboxes)
+
+        for ind in range(bboxes.shape[0]):
+            label = self.class_ids[int(cls[ind])]
+            pred_data = {
+                "image_id": int(img_id),
+                "category_id": label,
+                "bbox": bboxes[ind].numpy().tolist(),
+                "score": scores[ind].numpy().item(),
+                "segmentation": [],
+            }  # COCO json format
+            self.coco_data.append(pred_data)
+
+    def coco_evaluate(self):
+        import contextlib
+        import io
+        import json
+        import tempfile
+
+        from pycocotools.coco import COCO
+        from pycocotools.cocoeval import COCOeval
+
+        info = ""
+        # Evaluate the Dt (detection) json comparing with the ground truth
+        if len(self.coco_data) > 0:
+            cocoGt = COCO(self.gt_json)
+            _, tmp = tempfile.mkstemp()
+            json.dump(self.coco_data, open(tmp, "w"))
+            cocoDt = cocoGt.loadRes(tmp)
+
+            cocoEval = COCOeval(cocoGt, cocoDt, "bbox")
+            cocoEval.evaluate()
+            cocoEval.accumulate()
+            redirect_string = io.StringIO()
+            with contextlib.redirect_stdout(redirect_string):
+                cocoEval.summarize()
+            info = redirect_string.getvalue()
+
+        return info
 
     @staticmethod
     def process_batch(preds, labels, iouv):

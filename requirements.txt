@@ -1,5 +1,4 @@
 albumentations
-loguru
 numpy
 omegaconf
 pycocotools

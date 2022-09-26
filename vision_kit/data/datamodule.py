@@ -1,6 +1,7 @@
 import os
 from typing import Optional, Tuple
 
+import torch
 from pytorch_lightning import LightningDataModule
 from pytorch_lightning.utilities.types import (EVAL_DATALOADERS,
                                                TRAIN_DATALOADERS)
@@ -8,7 +9,7 @@ from torch.utils.data import DataLoader, SequentialSampler
 from vision_kit.data.augmentations import TrainAugPipeline, ValAugPipeline
 from vision_kit.data.datasets.yolo import YOLODataset
 from vision_kit.data.sampling import InfiniteSampler, YoloBatchSampler
-from vision_kit.utils.dataset_utils import collate_fn, worker_init_reset_seed
+from vision_kit.utils.dataset_utils import collate_fn
 
 from .datasets.coco import COCODataset
 from .mosiac_dataset import MosaicDataset
@@ -119,7 +120,7 @@ class LitDataModule(LightningDataModule):
             mosaic=self.aug_cfg["enable_mosaic"]
         )
 
-        train_dataloder: DataLoader = DataLoader(
+        train_dataloader: DataLoader = DataLoader(
             self.train_dataset,
             num_workers=self.num_workers,
             pin_memory=True,
@@ -127,7 +128,7 @@ class LitDataModule(LightningDataModule):
             collate_fn=collate_fn
         )
 
-        return train_dataloder
+        return train_dataloader
 
     def test_dataloader(self) -> EVAL_DATALOADERS:
         sampler: SequentialSampler = SequentialSampler(self.test_dataset)
@@ -144,8 +145,7 @@ class LitDataModule(LightningDataModule):
         return test_dataloader
 
     def val_dataloader(self) -> EVAL_DATALOADERS:
-        sampler: SequentialSampler = SequentialSampler(self.test_dataset)
-
+        sampler: SequentialSampler = SequentialSampler(self.val_dataset)
         val_dataloader: DataLoader = DataLoader(
             self.val_dataset,
             batch_size=self.batch_sz,

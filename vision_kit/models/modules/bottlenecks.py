@@ -34,7 +34,7 @@ class StandardBottleneck(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         y: torch.Tensor = self.conv2(self.conv1(x))
         if self.use_add:
-            y: torch.Tensor = y + x
+            y = y + x
         return y
 
 

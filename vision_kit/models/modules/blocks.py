@@ -1,5 +1,5 @@
 import math
-from typing import Any
+from typing import Any, List
 
 import torch
 from torch import nn
@@ -130,7 +130,7 @@ class Concat(nn.Module):
         super().__init__()
         self.dim = dimension
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: List[torch.Tensor]) -> torch.Tensor:
         return torch.cat(x, self.dim)
 
 
@@ -157,8 +157,8 @@ class SPPF(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x: torch.Tensor = self.conv1(x)
-        y1: Any = self.max_pool(x)
-        y2: Any = self.max_pool(y1)
+        y1: torch.Tensor = self.max_pool(x)
+        y2: torch.Tensor = self.max_pool(y1)
         return self.conv2(torch.cat((x, y1, y2, self.max_pool(y2)), 1))
 
 

@@ -6,11 +6,11 @@ from rich.logging import RichHandler
 logger = logging.getLogger("VisionKit")
 
 
-def setup_logger(path):
+def setup_logger(path, filename="train.log"):
     # the handler determines where the logs go: stdout/file
     rich_handler = RichHandler(rich_tracebacks=True)
     file_handler = logging.FileHandler(
-        os.path.join(path, "debug.log"), encoding="utf-8")
+        os.path.join(path, filename), encoding="utf-8")
 
     logger.setLevel(logging.DEBUG)
     rich_handler.setLevel(logging.DEBUG)
