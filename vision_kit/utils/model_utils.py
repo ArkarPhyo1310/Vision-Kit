@@ -155,35 +155,17 @@ def de_parallel(model):
     return model.module if is_parallel(model) else model
 
 
-def extract_ema_weight(checkpoint: Dict[str, Any]) -> Dict[str, Any]:
-    """Converts average state dict to the format that can be loaded to a model.
-    Args:
-        checkpoint: model.
-    Returns:
-        Converted average state dict.
-    """
+def process_ckpts(checkpoint:  Dict[str, Any]) -> Dict[str, Any]:
     state_dict = checkpoint["state_dict"]
-    avg_weights = {}
+    model_weight, ema_weight = {}, {}
     for k, v in state_dict.items():
         if "ema_model" in k:
-            avg_weights[k[17:]] = v
-    return avg_weights
+            ema_weight[k[17:]] = v
+            # continue
+        else:
+            model_weight[k] = v
 
-
-def remove_ema_weight(checkpoint: Dict[str, Any]) -> Dict[str, Any]:
-    """Converts average state dict to the format that can be loaded to a model.
-    Args:
-        checkpoint: model.
-    Returns:
-        Converted average state dict.
-    """
-    state_dict = checkpoint["state_dict"]
-    model_weights = {}
-    for k, v in state_dict.items():
-        if "ema_model" in k:
-            continue
-        model_weights[k] = v
-    return model_weights
+    return model_weight, ema_weight
 
 
 class ModelEMA(nn.Module):

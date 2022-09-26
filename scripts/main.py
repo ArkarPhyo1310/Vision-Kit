@@ -5,8 +5,8 @@ import warnings
 
 import pytorch_lightning as pl
 from omegaconf import OmegaConf
-from vision_kit.core.eval.yolo_eval import YOLOEvaluator
-from vision_kit.core.train.trainer import TrainingModule
+from vision_kit.core.eval.det_evaluator import DetEvaluator
+from vision_kit.core.train.det_trainer import TrainingModule
 from vision_kit.data.datamodule import LitDataModule
 from vision_kit.utils.general import mk_output_dir
 from vision_kit.utils.logging_utils import logger, setup_logger
@@ -28,7 +28,7 @@ def main(cfg, opt):
         num_workers=cfg.data.num_workers,
         img_sz=cfg.model.input_size,
     )
-    evaluator = YOLOEvaluator(
+    evaluator = DetEvaluator(
         class_labels=cfg.data.class_labels,
         img_size=cfg.model.input_size
     )

@@ -19,8 +19,7 @@ class YOLOV5Head(nn.Module):
         hyp: dict = None,
         device: str = "gpu",
         inplace: bool = True,
-        export: bool = False,
-        training: bool = True
+        export: bool = False
     ) -> None:
         super(YOLOV5Head, self).__init__()
         if anchors is None:
@@ -57,7 +56,7 @@ class YOLOV5Head(nn.Module):
         self.export: bool = export
 
         # loss
-        if training:
+        if hyp:
             self.gr = 1.0
             self.hyp = hyp
             self.cls_loss = nn.BCEWithLogitsLoss(

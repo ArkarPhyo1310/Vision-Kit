@@ -6,6 +6,7 @@ import numpy as np
 import pytorch_lightning as pl
 import torch
 import wandb
+from pytorch_lightning.loggers import TensorBoardLogger, WandbLogger
 from pytorch_lightning.utilities.types import STEP_OUTPUT
 from torch import nn
 from torch.optim.lr_scheduler import LambdaLR
@@ -15,10 +16,8 @@ from vision_kit.models.architectures import build_model
 from vision_kit.utils.drawing import grid_save
 from vision_kit.utils.image_proc import nms
 from vision_kit.utils.logging_utils import logger
-from vision_kit.utils.model_utils import (ModelEMA, extract_ema_weight,
-                                          load_ckpt, remove_ema_weight)
+from vision_kit.utils.model_utils import ModelEMA, load_ckpt, process_ckpts
 from vision_kit.utils.table import RichTable
-from pytorch_lightning.loggers import WandbLogger, TensorBoardLogger
 
 
 class TrainingModule(pl.LightningModule):
@@ -72,7 +71,7 @@ class TrainingModule(pl.LightningModule):
 
         targets = torch.cat(targets, 0)
         predn, targetn = self.evaluator.evaluate(
-            img=imgs, img_infos=img_infos, preds=output, targets=targets
+            img=imgs, img_infos=img_infos, idxs=idxs, preds=output, targets=targets
         )
 
     def test_step(self, batch, batch_idx) -> Optional[STEP_OUTPUT]:
@@ -89,7 +88,7 @@ class TrainingModule(pl.LightningModule):
 
         targets = torch.cat(targets, 0)
         predn, targetn = self.evaluator.evaluate(
-            img=imgs, img_infos=img_infos, preds=output, targets=targets
+            img=imgs, img_infos=img_infos, idxs=idxs, preds=output, targets=targets
         )
 
         pred_dict = [
@@ -124,7 +123,7 @@ class TrainingModule(pl.LightningModule):
                 logger.experiment.add_image('samples/train', self.train_batch_grid, 0)
 
     def validation_epoch_end(self, outputs) -> None:
-        map50, map95, _ = self.evaluator.evaluate_predictions()
+        map50, map95, _, _ = self.evaluator.summarize()
         self.log("mAP@.5", map50, prog_bar=True)
         self.log("mAP@.5:.95", map95, prog_bar=True)
 
@@ -146,7 +145,7 @@ class TrainingModule(pl.LightningModule):
                 trainer_logger.experiment.add_image('samples/test', self.test_batch_grid, 0)
 
         logger.info("Testing finished...")
-        map50, map95, self.per_class_table = self.evaluator.evaluate_predictions(details_per_class=True)
+        _, _, self.per_class_table, _ = self.evaluator.summarize(details_per_class=True)
         logger.info(self.per_class_table.table)
 
         results = self.metrics_mAP.compute()
@@ -241,19 +240,19 @@ class TrainingModule(pl.LightningModule):
         checkpoint["model"] = self.get_model(half=True).state_dict()
 
     def on_load_checkpoint(self, checkpoint: Dict[str, Any]) -> None:
+        model_weight, ema_weight = process_ckpts(checkpoint)
         if self.ema_model:
-            avg_params = extract_ema_weight(checkpoint)
-            if len(avg_params) != len(self.model.state_dict()):
+            if len(ema_weight) != len(self.model.state_dict()):
                 logger.info(
                     "Weight averaging is enabled but average state does not"
                     "match the model"
                 )
             else:
-                self.ema_model.module.load_state_dict(avg_params)
+                self.ema_model.module.load_state_dict(ema_weight)
                 self.ema_model.updates = checkpoint["epoch"]
                 logger.info("Loaded average state from checkpoint.")
         else:
-            checkpoint["state_dict"] = remove_ema_weight(checkpoint)
+            checkpoint["state_dict"] = model_weight
 
     @torch.no_grad()
     def to_torchscript(self, file_path: Optional[Union[str, Path]] = None, method: Optional[str] = "script",
@@ -261,6 +260,7 @@ class TrainingModule(pl.LightningModule):
         script_model = self.get_model()
 
         script_model.head.export = True
+        logger.info("Fusing Layers...")
         script_model.fuse()
         script_model.eval()
 
@@ -294,6 +294,7 @@ class TrainingModule(pl.LightningModule):
 
         model = self.get_model()
         model.head.export = True
+        logger.info("Fusing Layers...")
         model.fuse()
         model.eval()
 
@@ -332,15 +333,11 @@ class TrainingModule(pl.LightningModule):
 
     def get_model(self, half: bool = False):
         if self.ema_model:
-            tmp_model = self.ema_model.module
+            model = deepcopy(self.ema_model.module)
         else:
-            tmp_model = self.model
-        model = deepcopy(tmp_model)
+            model = deepcopy(self.model)
         if half:
             model.half()
-
-        del tmp_model
-
         return model
 
     @staticmethod

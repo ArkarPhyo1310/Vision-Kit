@@ -8,7 +8,6 @@ from typing import Any, List, Tuple
 import cv2
 import numpy as np
 from rich.progress import Progress
-from vision_kit.data.datasets.base import BaseDataset
 from vision_kit.data.datasets.datasets_wrapper import Dataset
 from vision_kit.utils.bboxes import xywhn_to_xyxy, xyxy_to_xywhn
 from vision_kit.utils.general import exif_size

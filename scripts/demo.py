@@ -1,60 +1,49 @@
+from time import time
+
 import cv2
-import numpy as np
 import torch
-from vision_kit.data.processing import ImageProcessor
+from vision_kit.classes.coco import COCO
+from vision_kit.demo.processing import ImageProcessor
 from vision_kit.models.architectures import YOLOV5
+from vision_kit.utils.drawing import Drawing
 from vision_kit.utils.general import dw_multiple_generator
-from vision_kit.utils.model_utils import intersect_dicts
 
-width, depth = dw_multiple_generator("s")
+width, depth = dw_multiple_generator("m")
 
-model: YOLOV5 = YOLOV5(dep_mul=depth, wid_mul=width, training=False, num_classes=7)
-model.load_state_dict(torch.load(
-    "outputs/YOLOv5/20220923142146/weights/best-map50_0.7.pt", map_location="cpu"), strict=False)
-
-# state_dict = torch.load("./pretrained_weights/yolov5s.pt", map_location="cpu")
-# csd = intersect_dicts(state_dict, model.state_dict())
-# model.load_state_dict(csd, strict=False)
+model: YOLOV5 = YOLOV5(dep_mul=depth, wid_mul=width, num_classes=80)
+model.load_state_dict(torch.load("./pretrained_weights/yolov5m.pt", map_location="cpu"), strict=False)
 model.fuse()
 model.eval()
+model.cuda()
 
-dummy_input = cv2.imread("./assets/fish.jpg")
 image_processor: ImageProcessor = ImageProcessor(auto=False)
+drawer: Drawing = Drawing(COCO)
+webcam = cv2.VideoCapture(0)
 
-x, _ = image_processor.preprocess(dummy_input)
-with torch.no_grad():
-    y = model(x)
-i = image_processor.postprocess(y[0])
-print(i)
-classes_labels = ['fish', 'jellyfish', 'penguin', 'puffin', 'shark', 'starfish', 'stingray']
+while True:
+    has_frame, frame = webcam.read()
+    if not has_frame:
+        break
+    dummy_input = frame
+    pre_start_time = time()
+    x, _ = image_processor.preprocess(dummy_input)
+    pre_proc_time = (time() - pre_start_time) * 1e3
 
-for pred in i:
-    bbox = pred[:4]
-    cls = pred[-1]
-    bbox = bbox.cpu().numpy()
-    cls = cls.cpu().numpy()
-    (x0, y0), (x1, y1) = (int(pred[0]), int(
-        pred[1])), (int(pred[2]), int(pred[3]))
-    cls = int(cls)
-    cv2.rectangle(
-        dummy_input, (int(pred[0]), int(pred[1])), (int(pred[2]), int(pred[3])), color=(255, 0, 0), thickness=1
-    )
-    text = '{}'.format(classes_labels[cls])
-    txt_color = (0, 0, 0) if np.mean(
-        (255, 0, 0)) > 0.5 else (255, 255, 255)
-    font = cv2.FONT_HERSHEY_SIMPLEX
-    txt_size = cv2.getTextSize(text, font, 0.4, 1)[0]
-    txt_bk_color = ((255, 0, 0))
-    cv2.rectangle(
-        dummy_input,
-        (x0, y0 + 1),
-        (x0 + txt_size[0] + 1, y0 + int(1.5*txt_size[1])),
-        txt_bk_color,
-        -1
-    )
-    cv2.putText(
-        dummy_input, text, (x0, y0 + txt_size[1]), font, 0.4, txt_color, thickness=1)
+    inf_start_time = time()
+    with torch.inference_mode():
+        y = model(x.cuda())
+    inf_time = (time() - inf_start_time) * 1e3
 
-cv2.imshow("Demo", dummy_input)
-cv2.waitKey(0)
+    post_start_time = time()
+    i = image_processor.postprocess(y[0])
+    dummy_input = drawer.draw(dummy_input, i)
+    post_proc_time = (time() - post_start_time) * 1e3
+
+    print(f"Pre: {pre_proc_time:.1f} ms, Inf: {inf_time:.1f} ms, Post: {post_proc_time:.1f} ms => Total: {(pre_proc_time+inf_time+post_proc_time):.1f} ms")
+
+    cv2.imshow("Demo", dummy_input)
+    key = cv2.waitKey(1)
+    if key == ord("q"):
+        break
+
 cv2.destroyAllWindows()

@@ -6,6 +6,7 @@ from vision_kit.models.architectures.yolov5 import YOLOV5
 from vision_kit.utils.general import dw_multiple_generator
 
 
+@torch.no_grad()
 def convert_yolov5(version: str = "s") -> None:
     version = version.lower()
     model_name = "yolov5" + version
@@ -13,12 +14,12 @@ def convert_yolov5(version: str = "s") -> None:
                                "x"], f"\"{version}\" is either wrong or unsupported!"
 
     width, depth = dw_multiple_generator(version)
-    model: YOLOV5 = YOLOV5(depth, width, training=False)
+    model: YOLOV5 = YOLOV5(depth, width)
     model.eval()
 
     new_model: Dict[str, Any] = model.state_dict()
 
-    modelv5 = torch.hub.load('D:\Personal_Projects\yolov5',
+    modelv5 = torch.hub.load('/home/arkar/ME/yolov5/',
                              model_name, autoshape=False, force_reload=False, source="local")
     state_dict = modelv5.state_dict()
     state_dict.pop('model.model.24.anchors', None)

@@ -4,7 +4,6 @@ from vision_kit.models.backbones import CSPDarknet
 from vision_kit.models.heads import YOLOV5Head
 from vision_kit.models.modules.blocks import ConvBnAct
 from vision_kit.models.necks import PAFPN
-from vision_kit.utils.logging_utils import logger
 from vision_kit.utils.model_utils import fuse_conv_and_bn, init_weights
 
 
@@ -16,8 +15,7 @@ class YOLOV5(nn.Module):
         act: str = "silu",
         hyp: dict = None,
         num_classes: int = 80,
-        device: str = "gpu",
-        training: bool = True
+        device: str = "gpu"
     ) -> None:
         super(YOLOV5, self).__init__()
 
@@ -29,7 +27,7 @@ class YOLOV5(nn.Module):
         )
 
         self.head: YOLOV5Head = YOLOV5Head(
-            num_classes, width=wid_mul, hyp=hyp, training=training, device=device)
+            num_classes, width=wid_mul, hyp=hyp, device=device)
 
         init_weights(self)
 
@@ -41,7 +39,6 @@ class YOLOV5(nn.Module):
         return x
 
     def fuse(self):
-        logger.info("Fusing Layers...")
         for module in [self.backbone, self.neck, self.head]:
             for m in module.modules():
                 if type(m) is ConvBnAct and hasattr(m, "bn"):

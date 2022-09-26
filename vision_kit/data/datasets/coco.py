@@ -7,7 +7,6 @@ import cv2
 import numpy as np
 from pycocotools.coco import COCO
 from rich.progress import Progress
-from vision_kit.data.datasets.base import BaseDataset
 from vision_kit.data.datasets.datasets_wrapper import Dataset
 from vision_kit.utils import remove_useless_info
 from vision_kit.utils.bboxes import xywh_to_cxcywh, xywh_to_xyxy, xyxy_to_xywh
@@ -17,7 +16,7 @@ from vision_kit.utils.logging_utils import logger
 NUM_THREADS = min(8, os.cpu_count())
 
 
-class COCODataset(BaseDataset):
+class COCODataset(Dataset):
     def __init__(
         self,
         data_path: str,

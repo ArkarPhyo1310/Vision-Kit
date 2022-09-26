@@ -3,9 +3,9 @@ import random
 
 import cv2
 import numpy as np
-
 from vision_kit.utils import adjust_box_anns
-from vision_kit.utils.bboxes import xywh_to_cxcywh, xywhn_to_xyxy, xyxy_to_xywh, xyxy_to_xywhn
+from vision_kit.utils.bboxes import (xywh_to_cxcywh,
+                                     xyxy_to_xywh, xyxy_to_xywhn)
 
 from .augmentations import random_affine
 from .datasets.datasets_wrapper import Dataset

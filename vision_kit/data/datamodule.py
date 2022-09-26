@@ -8,8 +8,8 @@ from pytorch_lightning.utilities.types import (EVAL_DATALOADERS,
 from torch.utils.data import DataLoader, SequentialSampler
 from vision_kit.data.augmentations import TrainAugPipeline, ValAugPipeline
 from vision_kit.data.datasets.yolo import YOLODataset
-from vision_kit.data.sampling import InfiniteDataLoader, InfiniteSampler, YoloBatchSampler
-from vision_kit.utils.dataset_utils import collate_fn, worker_init_reset_seed
+from vision_kit.data.sampling import InfiniteSampler, YoloBatchSampler
+from vision_kit.utils.dataset_utils import collate_fn
 
 from .datasets.coco import COCODataset
 from .mosiac_dataset import MosaicDataset
@@ -111,33 +111,20 @@ class LitDataModule(LightningDataModule):
                 )
 
     def train_dataloader(self) -> TRAIN_DATALOADERS:
-        # sampler: InfiniteSampler = InfiniteSampler(
-        #     len(self.train_dataset), seed=self.seed if self.seed else 13)
-        generator = torch.Generator()
-        generator.manual_seed(0)
-        # batch_sampler: YoloBatchSampler = YoloBatchSampler(
-        #     sampler=sampler,
-        #     batch_size=self.batch_sz,
-        #     drop_last=False,
-        #     mosaic=self.aug_cfg["enable_mosaic"]
-        # )
+        sampler: InfiniteSampler = InfiniteSampler(
+            len(self.train_dataset), seed=self.seed if self.seed else 13)
+        batch_sampler: YoloBatchSampler = YoloBatchSampler(
+            sampler=sampler,
+            batch_size=self.batch_sz,
+            drop_last=False,
+            mosaic=self.aug_cfg["enable_mosaic"]
+        )
 
-        # train_dataloader: DataLoader = DataLoader(
-        #     self.train_dataset,
-        #     num_workers=self.num_workers,
-        #     pin_memory=True,
-        #     batch_sampler=batch_sampler,
-        #     generator=generator,
-        #     collate_fn=collate_fn
-        # )
-
-        train_dataloader = InfiniteDataLoader(
+        train_dataloader: DataLoader = DataLoader(
             self.train_dataset,
             num_workers=self.num_workers,
             pin_memory=True,
-            batch_size=self.batch_sz,
-            drop_last=False,
-            generator=generator,
+            batch_sampler=batch_sampler,
             collate_fn=collate_fn
         )
 

@@ -178,16 +178,6 @@ class TrainAugPipeline:
                 labels = xyxy_to_xywh(labels)
             transformed_ann = labels
 
-        # dd = xywhn_to_xyxy(transformed_ann)
-        # for bbox in dd:
-        #     box = list(map(int, bbox.tolist()))
-        #     cv2.rectangle(
-        #         transformed_img, box[:2], box[2:4], (255, 0, 0),
-        #         2
-        #     )
-        # cv2.imshow("T", transformed_img)
-        # cv2.waitKey(0)
-
         if transformed_ann.ndim < 2:
             transformed_ann = np.zeros((1, 5))
 
@@ -245,16 +235,6 @@ class ValAugPipeline:
                 labels[:, :4] *= ratio
                 labels = xyxy_to_xywh(labels)
             transformed_ann = labels
-
-        # dd = xywhn_to_xyxy(transformed_ann)
-        # for bbox in dd:
-        #     box = list(map(int, bbox.tolist()))
-        #     cv2.rectangle(
-        #         transformed_img, box[:2], box[2:4], (255, 0, 0),
-        #         2
-        #     )
-        # cv2.imshow("T", transformed_img)
-        # cv2.waitKey(0)
 
         if transformed_ann.ndim < 2:
             transformed_ann = np.zeros((1, 5))

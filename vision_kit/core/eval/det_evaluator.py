@@ -7,7 +7,6 @@ from vision_kit.utils.bboxes import cxcywh_to_xyxy, xyxy_to_xywh
 from vision_kit.utils.image_proc import scale_coords
 from vision_kit.utils.metrics import smooth
 from vision_kit.utils.table import RichTable
-from vision_kit.utils.logging_utils import logger
 
 
 def ap_per_class(tp, conf, pred_cls, target_cls, eps=1e-16):
@@ -97,15 +96,19 @@ def compute_ap(recall, precision):
     return ap, mpre, mrec
 
 
-class YOLOEvaluator:
+class DetEvaluator:
     def __init__(
         self,
         class_labels: list,
-        img_size: Tuple[int, int] = (640, 640)
+        img_size: Tuple[int, int] = (640, 640),
+        gt_json: str = None,
+        label_format: str = "yolo"
     ) -> None:
         self.class_labels = class_labels
         self.img_sz = img_size
         self.class_ids = [i + 1 for i in range(len(self.class_labels))]
+        self.gt_json = gt_json
+        self.label_format = label_format
 
         self.precision = 0.0
         self.recall = 0.0
@@ -120,17 +123,17 @@ class YOLOEvaluator:
         self.iouv = torch.linspace(0.5, 0.95, 10)
         self.num_iou = self.iouv.numel()
         self.seen = 0
-        self.data_dict = []
+        self.coco_data = []
 
     def evaluate(
         self, img: torch.Tensor, img_infos: list, idxs: list,
         preds: torch.Tensor, targets: torch.Tensor
     ):
-        data_list = []
         self.device = targets.device
         self.iouv = self.iouv.to(self.device)
         b, c, h, w = img.shape
-        targets[:, 2:] *= torch.tensor((w, h, w, h), device=self.device)
+        if self.label_format == "yolo":
+            targets[:, 2:] *= torch.tensor((w, h, w, h), device=self.device)
 
         predictions = []
         detections = []
@@ -168,33 +171,19 @@ class YOLOEvaluator:
             # Correct, conf, pred_cls, target_cls
             self.stats.append((correct, pred[:, 4], pred[:, 5], labels[:, 0]))
 
-            # For COCO evaluation
-            pred_output = predn.cpu()
-            bboxes = pred_output[:, 0:4]
-            scores = pred_output[:, 4]
-            cls = pred_output[:, 5]
-            bboxes = xyxy_to_xywh(bboxes)
-
-            for ind in range(bboxes.shape[0]):
-                label = self.class_ids[int(cls[ind])]
-                pred_data = {
-                    "image_id": int(img_id),
-                    "category_id": label,
-                    "bbox": bboxes[ind].numpy().tolist(),
-                    "score": scores[ind].numpy().item(),
-                    "segmentation": [],
-                }  # COCO json format
-                data_list.append(pred_data)
+            if self.gt_json is not None:
+                # For COCO evaluation
+                self.convert_to_coco(predn, img_id)
 
             predictions.append(predn)
             detections.append(targetn)
 
-        self.data_dict.append(data_list)
         return torch.vstack(predictions), torch.vstack(detections)
 
-    def evaluate_predictions(self, details_per_class: bool = False):
+    def summarize(self, details_per_class: bool = False, do_coco_eval: bool = False):
         self.stats = [torch.cat(x, 0).cpu().numpy() for x in zip(*self.stats)]
         rtable = None
+        coco_eval_info = None
         num_classes = len(self.class_labels)
         if len(self.stats) and self.stats[0].any():
             true_pos, false_pos, self.precision, self.recall, self.f1, ap, ap_class = ap_per_class(
@@ -223,34 +212,54 @@ class YOLOEvaluator:
                 )
 
             rtable.add_headers(
-                ["Class", "Images", "Num_Targets", "P", "R", "mAP@.5", "mAP@.5:.95"])
+                ["Class", "Images", "Num_Targets", "Precision", "Recall", "mAP@.5", "mAP@.5:.95"])
             rtable.add_content(table_content)
 
-        self.stats = []
-        self.seen = 0
-        return self.map50, self.map95, rtable
+        if self.gt_json is not None and do_coco_eval:
+            coco_eval_info = self.coco_evaluate()
 
-    def coco_evaluate(self, gt_json: str):
-        import tempfile
+        self.seen = 0
+        self.stats.clear()
+        self.coco_data.clear()
+
+        return self.map50, self.map95, rtable, coco_eval_info
+
+    def convert_to_coco(self, pred, img_id):
+        pred_output = pred.cpu()
+        bboxes = pred_output[:, 0:4]
+        scores = pred_output[:, 4]
+        cls = pred_output[:, 5]
+        bboxes = xyxy_to_xywh(bboxes)
+
+        for ind in range(bboxes.shape[0]):
+            label = self.class_ids[int(cls[ind])]
+            pred_data = {
+                "image_id": int(img_id),
+                "category_id": label,
+                "bbox": bboxes[ind].numpy().tolist(),
+                "score": scores[ind].numpy().item(),
+                "segmentation": [],
+            }  # COCO json format
+            self.coco_data.append(pred_data)
+
+    def coco_evaluate(self):
         import contextlib
         import io
         import json
+        import tempfile
 
         from pycocotools.coco import COCO
         from pycocotools.cocoeval import COCOeval
 
-        logger.info("Performing COCO evaluation...")
-
-        annType = ["segm", "bbox", "keypoints"]
         info = ""
         # Evaluate the Dt (detection) json comparing with the ground truth
-        if len(self.data_dict) > 0:
-            cocoGt = COCO(gt_json)
+        if len(self.coco_data) > 0:
+            cocoGt = COCO(self.gt_json)
             _, tmp = tempfile.mkstemp()
-            json.dump(self.data_dict, open(tmp, "w"))
+            json.dump(self.coco_data, open(tmp, "w"))
             cocoDt = cocoGt.loadRes(tmp)
 
-            cocoEval = COCOeval(cocoGt, cocoDt, annType[1])
+            cocoEval = COCOeval(cocoGt, cocoDt, "bbox")
             cocoEval.evaluate()
             cocoEval.accumulate()
             redirect_string = io.StringIO()
@@ -258,9 +267,9 @@ class YOLOEvaluator:
                 cocoEval.summarize()
             info = redirect_string.getvalue()
 
-        logger.info(info)
+        return info
 
-    @ staticmethod
+    @staticmethod
     def process_batch(preds, labels, iouv):
         """
         Return correct predictions matrix. Both sets of boxes are in (x1, y1, x2, y2) format.
