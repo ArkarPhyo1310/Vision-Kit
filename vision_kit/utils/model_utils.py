@@ -3,8 +3,8 @@
 
 import math
 import os
-from copy import deepcopy
 import random
+from copy import deepcopy
 from typing import Any, Dict
 
 import numpy as np
@@ -160,8 +160,8 @@ def process_ckpts(checkpoint:  Dict[str, Any]) -> Dict[str, Any]:
     model_weight, ema_weight = {}, {}
     for k, v in state_dict.items():
         if "ema_model" in k:
-            ema_weight[k[17:]] = v
-            # continue
+            # ema_weight[k[17:]] = v
+            ema_weight[k.replace("ema_model.", "")] = v
         else:
             model_weight[k] = v
 

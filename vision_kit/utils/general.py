@@ -1,9 +1,19 @@
 import contextlib
 import os
-from typing import List, Tuple
 from datetime import datetime
+from typing import List, Tuple
 
 from PIL import ExifTags
+
+
+def update_loss_cfg(cfg):
+    nl = 3
+    cfg.hypermeters.box *= 3 / nl
+    cfg.hypermeters.cls *= cfg.model.num_classes / 80 * 3 / nl  # scale to classes and layers
+    cfg.hypermeters.obj *= (cfg.model.input_size[0] / 640) ** 2 * 3 / nl  # scale to image size and layers
+
+    return cfg
+
 
 # Get orientation exif tag
 for orientation in ExifTags.TAGS.keys():
@@ -29,9 +39,9 @@ def search_dir(path: str, set_type: str = "train") -> List[str]:
     return list(filter(lambda x: set_type in x, dir_list))
 
 
-def mk_output_dir(path: str, model_name: str):
-    ct_format = datetime.now().strftime('%Y%m%d%H%M%S')
-    output_path = os.path.join(path, model_name, ct_format)
+def mk_output_dir(path: str, model_name: str, task: str):
+    ct_format = datetime.now().strftime('%Y%m%d%H%M')
+    output_path = os.path.join(path, model_name, task, ct_format)
     os.makedirs(output_path, exist_ok=True)
 
     return output_path

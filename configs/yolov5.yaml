@@ -5,6 +5,7 @@ model:
   input_size: [640, 640]
   act: "silu"
   device: "gpu"
+  weight: "./pretrained_weights/yolov5s.pt"
 data:
   data_format: "yolo"
   data_dir: "/home/arkar/Downloads/Compressed/Aquarium"
@@ -13,7 +14,7 @@ data:
   val_path: "valid/images"
   test_path: "test/images"
   batch_size: 8
-  max_epochs: 25
+  max_epochs: 20
   num_workers: 8
   filter_classes: []
   class_labels: ['fish', 'jellyfish', 'penguin', 'puffin', 'shark', 'starfish', 'stingray']
