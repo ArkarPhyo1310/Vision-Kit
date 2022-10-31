@@ -27,18 +27,6 @@ class TrainingModule(pl.LightningModule):
         model_info = summary(self.model, input_size=self.example_input_array.shape, verbose=0, depth=2)
         logger.info(f"Model Info\n{model_info}")
 
-    def training_step(self, *args, **kwargs) -> STEP_OUTPUT:
-        return super().training_step(*args, **kwargs)
-
-    def validation_step(self, *args, **kwargs) -> Optional[STEP_OUTPUT]:
-        return super().validation_step(*args, **kwargs)
-
-    def test_step(self, *args, **kwargs) -> Optional[STEP_OUTPUT]:
-        return super().test_step(*args, **kwargs)
-
-    def configure_optimizers(self):
-        return super().configure_optimizers()
-
     def on_save_checkpoint(self, checkpoint: Dict[str, Any]) -> None:
         checkpoint["model"] = self.get_model(half=True).state_dict()
 
@@ -51,7 +39,7 @@ class TrainingModule(pl.LightningModule):
                     "match the model"
                 )
             else:
-                # self.ema_model.module.load_state_dict(ema_weight)
+                self.ema_model.module.load_state_dict(ema_weight)
                 self.ema_model.updates = checkpoint["epoch"]
                 logger.info("Loaded average state from checkpoint.")
         else:

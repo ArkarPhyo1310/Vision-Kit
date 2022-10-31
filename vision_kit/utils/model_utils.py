@@ -17,6 +17,7 @@ __all__ = ["meshgrid"]
 
 activations_methods: Dict[str, Any] = {
     "relu": nn.ReLU,
+    "relu6": nn.ReLU6,
     "leaky_relu": nn.LeakyReLU,
     "silu": nn.SiLU,
     "hard_swish": nn.Hardswish,
