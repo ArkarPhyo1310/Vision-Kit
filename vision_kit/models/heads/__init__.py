@@ -1,1 +1,1 @@
-from .yolov5 import YOLOV5Head
+from .yolov5 import YoloV5Head

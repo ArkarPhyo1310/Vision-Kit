@@ -1,11 +1,11 @@
 model:
-  name: "YOLOv5"
-  version: "s"
+  name: "YOLOv7"
+  version: "base"
   num_classes: 7
   input_size: [640, 640]
   act: "silu"
   device: "gpu"
-  weight: "./pretrained_weights/yolov5s.pt"
+  weight: "./pretrained_weights/yolov7.pt"
 data:
   data_format: "yolo"
   data_dir: "/home/arkar/Downloads/Compressed/Aquarium"

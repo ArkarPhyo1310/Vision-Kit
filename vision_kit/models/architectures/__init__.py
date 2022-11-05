@@ -12,9 +12,7 @@ def build_model(cfg: DictConfig):
             wid_mul=width,
             dep_mul=depth,
             act=cfg.model.act,
-            num_classes=cfg.model.num_classes,
-            hyp=cfg.hypermeters,
-            device=cfg.model.device
+            num_classes=cfg.model.num_classes
         )
     else:
         raise NotImplemented

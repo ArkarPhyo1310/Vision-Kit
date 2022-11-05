@@ -10,6 +10,7 @@ from torch.optim.lr_scheduler import LambdaLR
 from torchmetrics.detection.mean_ap import MeanAveragePrecision
 from vision_kit.core.train.base_trainer import TrainingModule
 from vision_kit.models.architectures import build_model
+from vision_kit.models.losses.yolo import YoloLoss
 from vision_kit.utils.drawing import grid_save
 from vision_kit.utils.image_proc import nms
 from vision_kit.utils.logging_utils import logger
@@ -33,6 +34,8 @@ class DetTrainer(TrainingModule):
         self.evaluator = evaluator
         self.ema_model = ModelEMA(self.model)
         self.metrics_mAP = MeanAveragePrecision(compute_on_cpu=True)
+        self.loss = YoloLoss(hyp=self.hyp_cfg)
+        self.loss.set_anchor(self.model.head.anchors)
 
         self.model_info()
 
@@ -42,11 +45,12 @@ class DetTrainer(TrainingModule):
         imgs /= 255.0
 
         if batch_idx == 0:
-            self.train_batch_grid = grid_save(imgs, targets, name=f"{self.data_cfg.output_dir}/train")
+            self.train_batch_grid = grid_save(
+                imgs, targets, name=f"{self.data_cfg.output_dir}/train")
 
         outputs = self.model(imgs)
         targets = torch.cat(targets, 0)
-        loss, loss_items = self.model.head.compute_loss(outputs, targets)
+        loss, loss_items = self.loss(outputs, targets)
 
         return loss
 
@@ -56,7 +60,8 @@ class DetTrainer(TrainingModule):
         imgs /= 255.0
 
         if batch_idx == 0:
-            self.val_batch_grid = grid_save(imgs, targets, name=f"{self.data_cfg.output_dir}/val")
+            self.val_batch_grid = grid_save(
+                imgs, targets, name=f"{self.data_cfg.output_dir}/val")
 
         outputs = self.get_model()(imgs)
         output = nms(outputs[0], self.test_cfg.conf_thresh,
@@ -73,7 +78,8 @@ class DetTrainer(TrainingModule):
         imgs /= 255.0
 
         if batch_idx == 0:
-            self.test_batch_grid = grid_save(imgs, targets, name=f"{self.data_cfg.output_dir}/test")
+            self.test_batch_grid = grid_save(
+                imgs, targets, name=f"{self.data_cfg.output_dir}/test")
 
         outputs = self.get_model()(imgs)
         output = nms(outputs[0], self.test_cfg.conf_thresh,
@@ -113,7 +119,8 @@ class DetTrainer(TrainingModule):
                     "samples/train": [wandb.Image(f"{self.data_cfg.output_dir}/train.jpg")]
                 })
             elif isinstance(logger, TensorBoardLogger):
-                logger.experiment.add_image('samples/train', self.train_batch_grid, 0)
+                logger.experiment.add_image(
+                    'samples/train', self.train_batch_grid, 0)
 
     def validation_epoch_end(self, outputs) -> None:
         map50, map95, _, _ = self.evaluator.summarize()
@@ -126,7 +133,8 @@ class DetTrainer(TrainingModule):
                     "samples/val": [wandb.Image(f"{self.data_cfg.output_dir}/val.jpg")]
                 })
             elif isinstance(logger, TensorBoardLogger):
-                logger.experiment.add_image('samples/val', self.val_batch_grid, 0)
+                logger.experiment.add_image(
+                    'samples/val', self.val_batch_grid, 0)
 
     def test_epoch_end(self, outputs) -> None:
         for trainer_logger in self.loggers:
@@ -135,17 +143,20 @@ class DetTrainer(TrainingModule):
                     "samples/test": [wandb.Image(f"{self.data_cfg.output_dir}/test.jpg")]
                 })
             elif isinstance(trainer_logger, TensorBoardLogger):
-                trainer_logger.experiment.add_image('samples/test', self.test_batch_grid, 0)
+                trainer_logger.experiment.add_image(
+                    'samples/test', self.test_batch_grid, 0)
 
         logger.info("Testing finished...")
-        _, _, self.per_class_table, _ = self.evaluator.summarize(details_per_class=True)
+        _, _, self.per_class_table, _ = self.evaluator.summarize(
+            details_per_class=True)
         logger.info(self.per_class_table.table)
 
         results = self.metrics_mAP.compute()
 
         mAP_res = []
         self.mAP_table = RichTable("Average Precision (AP)")
-        self.mAP_table.add_headers(["mAP", "mAP(.50)", "mAP(.75)", "mAP(small)", "mAP(medium)", "mAP(large)"])
+        self.mAP_table.add_headers(
+            ["mAP", "mAP(.50)", "mAP(.75)", "mAP(small)", "mAP(medium)", "mAP(large)"])
         mAP_res.append(round(results["map"].detach().item(), 3))
         mAP_res.append(round(results["map_50"].detach().item(), 3))
         mAP_res.append(round(results["map_75"].detach().item(), 3))
@@ -156,7 +167,8 @@ class DetTrainer(TrainingModule):
 
         mAR_res = []
         self.mAR_table = RichTable("Average Recall (AR)")
-        self.mAR_table.add_headers(["mAR", "mAR(max=10)", "mAR(max=100)", "mAR(small)", "mAR(medium)", "mAR(large)"])
+        self.mAR_table.add_headers(
+            ["mAR", "mAR(max=10)", "mAR(max=100)", "mAR(small)", "mAR(medium)", "mAR(large)"])
         mAR_res.append(round(results["mar_1"].detach().item(), 3))
         mAR_res.append(round(results["mar_10"].detach().item(), 3))
         mAR_res.append(round(results["mar_100"].detach().item(), 3))
@@ -169,29 +181,32 @@ class DetTrainer(TrainingModule):
         logger.info(self.mAR_table.table)
 
     def configure_optimizers(self):
-        g = [], [], []  # optimizer parameter groups
-        # normalization layers, i.e. BatchNorm2d()
-        bn = tuple(v for k, v in nn.__dict__.items() if 'Norm' in k)
-        for v in self.model.modules():
-            if hasattr(v, 'bias') and isinstance(v.bias, nn.Parameter):  # bias (no decay)
-                g[2].append(v.bias)
-            if isinstance(v, bn):  # weight (no decay)
-                g[1].append(v.weight)
-            elif hasattr(v, 'weight') and isinstance(v.weight, nn.Parameter):  # weight (with decay)
-                g[0].append(v.weight)
+        # g = [], [], []  # optimizer parameter groups
+        # # normalization layers, i.e. BatchNorm2d()
+        # bn = tuple(v for k, v in nn.__dict__.items() if 'Norm' in k)
+        # for v in self.model.modules():
+        #     if hasattr(v, 'bias') and isinstance(v.bias, nn.Parameter):  # bias (no decay)
+        #         g[2].append(v.bias)
+        #     if isinstance(v, bn):  # weight (no decay)
+        #         g[1].append(v.weight)
+        #     elif hasattr(v, 'weight') and isinstance(v.weight, nn.Parameter):  # weight (with decay)
+        #         g[0].append(v.weight)
 
-        optimizer = torch.optim.SGD(
-            g[2], lr=self.hyp_cfg.lr0, momentum=self.hyp_cfg.momentum, nesterov=True)
+        # optimizer = torch.optim.SGD(
+        #     g[2], lr=self.hyp_cfg.lr0, momentum=self.hyp_cfg.momentum, nesterov=True)
 
-        # add g0 with weight_decay
-        optimizer.add_param_group(
-            {'params': g[0], 'weight_decay': self.hyp_cfg.weight_decay})
-        # add g1 (BatchNorm2d weights)
-        optimizer.add_param_group({'params': g[1], 'weight_decay': 0.0})
+        # # add g0 with weight_decay
+        # optimizer.add_param_group(
+        #     {'params': g[0], 'weight_decay': self.hyp_cfg.weight_decay})
+        # # add g1 (BatchNorm2d weights)
+        # optimizer.add_param_group({'params': g[1], 'weight_decay': 0.0})
 
-        def lf(x): return (1 - x / self.data_cfg.max_epochs) * \
-            (1.0 - self.hyp_cfg['lrf']) + self.hyp_cfg['lrf']  # linear
-        lr_scheduler = LambdaLR(optimizer, lr_lambda=lf)
+        # def lf(x): return (1 - x / self.data_cfg.max_epochs) * \
+        #     (1.0 - self.hyp_cfg['lrf']) + self.hyp_cfg['lrf']  # linear
+        # lr_scheduler = LambdaLR(optimizer, lr_lambda=lf)
+
+        optimizer, lr_scheduler = self.model.get_optimizer(
+            self.hyp_cfg, self.data_cfg.max_epochs)
 
         return [optimizer], [lr_scheduler]
 
@@ -226,4 +241,5 @@ class DetTrainer(TrainingModule):
         optimizer.step(closure=optimizer_closure)
 
     def on_train_start(self) -> None:
-        self.nw = max(round(self.hyp_cfg['warmup_epochs'] * self.trainer.num_training_batches), 100)
+        self.nw = max(
+            round(self.hyp_cfg['warmup_epochs'] * self.trainer.num_training_batches), 100)
