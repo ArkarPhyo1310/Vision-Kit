@@ -1,23 +1,27 @@
 import torch
 from torch import nn
 from torch.optim.lr_scheduler import LambdaLR
+
 from vision_kit.models.backbones import CSPDarknet
 from vision_kit.models.heads import YoloV5Head
 from vision_kit.models.modules.blocks import ConvBnAct
 from vision_kit.models.necks import PAFPN
+from vision_kit.utils.general import dw_multiple_generator
 from vision_kit.utils.model_utils import fuse_conv_and_bn, init_weights
 
 
 class YOLOV5(nn.Module):
     def __init__(
         self,
-        dep_mul: float,
-        wid_mul: float,
+        variant: str = "s",
         act: str = "silu",
         num_classes: int = 80,
-        stride: list = [8., 16., 32.]
+        training_mode: bool = True,
+        export: bool = False
     ) -> None:
         super(YOLOV5, self).__init__()
+
+        wid_mul, dep_mul = dw_multiple_generator(variant)
 
         self.backbone: CSPDarknet = CSPDarknet(
             depth_mul=dep_mul, width_mul=wid_mul, act=act
@@ -27,7 +31,8 @@ class YOLOV5(nn.Module):
         )
 
         self.head: YoloV5Head = YoloV5Head(
-            num_classes, width=wid_mul, stride=stride)
+            num_classes, width=wid_mul, training_mode=training_mode, export=export
+        )
 
         init_weights(self)
 
@@ -76,6 +81,7 @@ class YOLOV5(nn.Module):
 
 if __name__ == "__main__":
     from omegaconf import OmegaConf
+
     from vision_kit.models.architectures import build_model
     cfg = OmegaConf.load("./configs/yolov5.yaml")
     x = torch.rand((1, 3, 640, 640))

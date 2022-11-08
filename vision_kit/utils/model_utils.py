@@ -34,6 +34,15 @@ def get_act_layer(name: str) -> Any:
     return activations_methods[name](inplace=True)
 
 
+def init_bias(module: nn.ModuleList, stride: tuple, na: int, nc: int, cf=None):
+    for m, s in zip(module, stride):
+        b = m.bias.view(na, -1)
+        b.data[:, 4] += math.log(8 / (640 / s) ** 2)
+        b.data[:, 5:] += math.log(0.6 / (nc - 0.999999)
+                                  ) if cf is None else torch.log(cf / cf.sum())
+        m.bias = torch.nn.Parameter(b.view(-1), requires_grad=True)
+
+
 def init_weights(model: nn.Module):
     for m in model.modules():
         t = type(m)

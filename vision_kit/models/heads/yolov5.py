@@ -3,7 +3,9 @@ from typing import List, Tuple
 
 import torch
 from torch import nn
-from vision_kit.utils.model_utils import check_anchor_order, meshgrid
+
+from vision_kit.utils.model_utils import (check_anchor_order, init_bias,
+                                          meshgrid)
 
 
 class YoloV5Head(nn.Module):
@@ -14,7 +16,7 @@ class YoloV5Head(nn.Module):
         anchors: list = None,
         in_chs: tuple = (256, 512, 1024),
         stride: list = [8., 16., 32.],
-        inplace: bool = True,
+        training_mode: bool = False,
         export: bool = False
     ) -> None:
         super(YoloV5Head, self).__init__()
@@ -49,18 +51,10 @@ class YoloV5Head(nn.Module):
             for x in in_chs
         )
 
-        self.inplace: bool = inplace
+        self.training_mode = training_mode
         self.export: bool = export
 
-        self._init_biases()
-
-    def _init_biases(self, cf=None):
-        for m, s in zip(self.m, self.stride):
-            b = m.bias.view(self.num_anchors, -1)
-            b.data[:, 4] += math.log(8 / (640 / s) ** 2)
-            b.data[:, 5:] += math.log(0.6 / (self.num_classes - 0.999999)
-                                      ) if cf is None else torch.log(cf / cf.sum())
-            m.bias = torch.nn.Parameter(b.view(-1), requires_grad=True)
+        init_bias(self.m, self.stride, self.num_anchors, self.num_classes)
 
     def forward(self, x: torch.Tensor):
         z = []
@@ -71,13 +65,13 @@ class YoloV5Head(nn.Module):
             x[i] = x[i].view(bs, self.num_anchors, self.no, ny,
                              nx).permute(0, 1, 3, 4, 2).contiguous()
 
-            if not self.training:
+            if not self.training_mode:
                 if self.export or self.grid[i].shape[2:4] != x[i].shape[2:4]:
                     self.grid[i], self.anchor_grid[i] = self._make_grid(
                         nx, ny, i)
 
                 y = x[i].sigmoid().to(self.device)
-                if self.inplace:
+                if not torch.onnx.is_in_onnx_export():
                     y[..., 0:2] = (y[..., 0:2] * 2 +
                                    self.grid[i]) * self.stride[i]  # xy
                     y[..., 2:4] = (y[..., 2:4] * 2) ** 2 * \
@@ -90,7 +84,7 @@ class YoloV5Head(nn.Module):
                     y = torch.cat((xy, wh, conf), 4)
                 z.append(y.view(bs, -1, self.no))
 
-        return x if self.training else (torch.cat(z, 1), ) if self.export else (torch.cat(z, 1), x)
+        return x if self.training_mode else (torch.cat(z, 1), ) if self.export else (torch.cat(z, 1), x)
 
     def _make_grid(self, nx=20, ny=20, i=0) -> Tuple[torch.Tensor, torch.Tensor]:
         d: torch.device = self.anchors[i].device

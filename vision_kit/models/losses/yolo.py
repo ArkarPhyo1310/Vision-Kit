@@ -1,15 +1,16 @@
 import torch
 from torch import nn
+
 from vision_kit.utils.bboxes import bbox_iou, bbox_overlaps
 from vision_kit.utils.metrics import smooth_BCE
 
 
 class YoloLoss:
-    def __init__(self, hyp: dict = None) -> None:
+    def __init__(self, num_classes: int, hyp: dict = None) -> None:
         self.device = torch.device(
             "cuda" if torch.cuda.is_available() else "cpu")
 
-        self.num_classes = hyp["model"]["num_classes"]
+        self.num_classes = num_classes
         self.hyp = hyp
 
         self.gr = 1.0

@@ -8,6 +8,7 @@ from pytorch_lightning.utilities.types import STEP_OUTPUT
 from torch import nn
 from torch.optim.lr_scheduler import LambdaLR
 from torchmetrics.detection.mean_ap import MeanAveragePrecision
+
 from vision_kit.core.train.base_trainer import TrainingModule
 from vision_kit.models.architectures import build_model
 from vision_kit.models.losses.yolo import YoloLoss
@@ -34,7 +35,7 @@ class DetTrainer(TrainingModule):
         self.evaluator = evaluator
         self.ema_model = ModelEMA(self.model)
         self.metrics_mAP = MeanAveragePrecision(compute_on_cpu=True)
-        self.loss = YoloLoss(hyp=self.hyp_cfg)
+        self.loss = YoloLoss(cfg.model.num_classes, hyp=self.hyp_cfg)
         self.loss.set_anchor(self.model.head.anchors)
 
         self.model_info()

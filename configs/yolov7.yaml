@@ -1,10 +1,10 @@
 model:
   name: "YOLOv7"
   version: "base"
-  num_classes: 7
+  num_classes: 80
   input_size: [640, 640]
   act: "silu"
-  device: "gpu"
+  training_mode: true
   weight: "./pretrained_weights/yolov7.pt"
 data:
   data_format: "yolo"
