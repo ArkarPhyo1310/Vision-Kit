@@ -17,7 +17,7 @@ class YoloV7Head(nn.Module):
         stride: tuple = (8., 16., 32.),
         training_mode: bool = False,
         export: bool = False
-    ):  # detection layer
+    ) -> None:  # detection layer
         super(YoloV7Head, self).__init__()
         if anchors is None:
             anchors: List[list[int]] = [
@@ -37,10 +37,10 @@ class YoloV7Head(nn.Module):
         self.stride: torch.Tensor = torch.tensor(stride, device=self.device)
 
         self.anchors = torch.tensor(anchors, device=self.device).float().view(self.num_det_layers, -1, 2)
+        self.anchor_grid = self.anchors.clone().view(self.num_det_layers, 1, -1, 1, 1, 2)
+
         self.anchors /= self.stride.view(-1, 1, 1)
         self.anchors = check_anchor_order(self.anchors, self.stride)
-
-        self.anchor_grid = self.anchors.clone().view(self.num_det_layers, 1, -1, 1, 1, 2)
 
         self.m = nn.ModuleList(nn.Conv2d(x, self.no * self.num_anchors, 1)
                                for x in in_chs)  # output conv
@@ -49,13 +49,14 @@ class YoloV7Head(nn.Module):
             self.ia = nn.ModuleList(Implicit(x, ops="add") for x in in_chs)
             self.im = nn.ModuleList(
                 Implicit(self.no * self.num_anchors, ops="multiply") for _ in in_chs)
+            init_bias(self.m, self.stride, self.num_anchors, self.num_classes)
 
         self.export = export
-        init_bias(self.m, self.stride, self.num_anchors, self.num_classes)
 
-    def forward(self, x):
+    def forward(self, x: tuple[torch.Tensor]):
         # x = x.copy()  # for profiling
         z = []  # inference output
+        x = list(x)
         for i in range(self.num_det_layers):
             if hasattr(self, "ia") and hasattr(self, "im"):
                 x[i] = self.m[i](self.ia[i](x[i]))  # conv
@@ -76,7 +77,7 @@ class YoloV7Head(nn.Module):
                     # y.tensor_split((2, 4, 5), 4)  # torch 1.8.0
                     xy, wh, conf = y.split((2, 2, self.num_classes + 1), 4)
                     xy = xy * (2. * self.stride[i]) + (self.stride[i] * (self.grid[i] - 0.5))  # new xy
-                    wh = wh ** 2 * (4 * self.anchor_grid[i].data)  # new wh
+                    wh = wh ** 2 * (4 * self.anchor_grid[i])  # new wh
                     y = torch.cat((xy, wh, conf), 4)
                 z.append(y.view(bs, -1, self.no))
 
@@ -150,7 +151,7 @@ class YoloV7Head(nn.Module):
     #         self.m[i].bias *= self.im[i].implicit.reshape(c2)
     #         self.m[i].weight *= self.im[i].implicit.transpose(0, 1)
 
-    @staticmethod
-    def _make_grid(nx=20, ny=20):
-        yv, xv = meshgrid([torch.arange(ny), torch.arange(nx)])
+    @ staticmethod
+    def _make_grid(nx=20, ny=20) -> torch.Tensor:
+        yv, xv = torch.meshgrid([torch.arange(ny), torch.arange(nx)])
         return torch.stack((xv, yv), 2).view((1, 1, ny, nx, 2)).float()

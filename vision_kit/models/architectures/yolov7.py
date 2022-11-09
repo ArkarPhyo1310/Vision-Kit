@@ -1,3 +1,5 @@
+from copy import deepcopy
+
 import torch
 from torch import nn
 
@@ -27,14 +29,14 @@ class YOLOV7(nn.Module):
 
         init_weights(self)
 
-    def forward(self, x: torch.Tensor):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.backbone(x)
         x = self.neck(x)
         x = self.head(x)
 
         return x
 
-    def fuse(self):
+    def fuse(self) -> None:
         for module in [self.backbone, self.neck, self.head]:
             for m in module.modules():
                 if type(m) is ConvBnAct and hasattr(m, "bn"):
@@ -45,16 +47,16 @@ class YOLOV7(nn.Module):
                     m.fuse_repvgg_block()
 
     @staticmethod
-    def reparameterization(model: "YOLOV7", ckpt_path: str, exclude: list = []):
-        ckpt = torch.load(ckpt_path, map_location="cpu")
-        ckpt_state_dict = ckpt.float().state_dict()
+    def reparameterization(model: "YOLOV7", ckpt_path: str, exclude: list = []) -> "YOLOV7":
+        ckpt_state_dict = torch.load(ckpt_path, map_location="cpu")
+        # ckpt_state_dict = ckpt.state_dict()
 
         num_anchors = model.head.num_anchors
         exclude = exclude
 
         intersect_state_dict = {k: v for k, v in ckpt_state_dict.items() if k in model.state_dict(
         ) and not any(x in k for x in exclude) and v.shape == model.state_dict()[k].shape}
-        model.load_state_dict(intersect_state_dict)
+        model.load_state_dict(intersect_state_dict, strict=False)
 
         for i in range((model.head.num_classes + 5) * num_anchors):
             model.state_dict()['head.m.0.weight'].data[i, :, :, :] *= ckpt_state_dict['head.im.0.implicit'].data[:, i, ::].squeeze()
@@ -67,7 +69,9 @@ class YOLOV7(nn.Module):
         model.state_dict()['head.m.1.bias'].data *= ckpt_state_dict['head.im.1.implicit'].data.squeeze()
         model.state_dict()['head.m.2.bias'].data *= ckpt_state_dict['head.im.2.implicit'].data.squeeze()
 
-        return model
+        re_model = deepcopy(model)
+
+        return re_model
 
 
 if __name__ == "__main__":

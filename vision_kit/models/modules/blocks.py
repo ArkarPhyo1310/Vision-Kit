@@ -4,6 +4,7 @@ from typing import Any, List
 import numpy as np
 import torch
 from torch import nn
+
 from vision_kit.utils.model_utils import (auto_pad, fuse_conv_and_bn,
                                           get_act_layer)
 
@@ -242,7 +243,7 @@ class SPPCSPC(nn.Module):
         )
         self.conv7 = ConvBnAct(
             2 * hidden_chs, outs,
-            kernel=3, stride=1,
+            kernel=1, stride=1,
             groups=groups, act=act
         )
 
@@ -255,8 +256,7 @@ class SPPCSPC(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x1 = self.conv4(self.conv3(self.conv1(x)))
-        y1 = self.conv6(self.conv5(
-            torch.cat([x1] + [mp(x1) for mp in self.mp_modules], 1)))
+        y1 = self.conv6(self.conv5(torch.cat([x1] + [mp(x1) for mp in self.mp_modules], 1)))
         y2 = self.conv2(x)
 
         return self.conv7(torch.cat((y1, y2), dim=1))
@@ -294,10 +294,8 @@ class RepConv(nn.Module):
         else:
             self.rbr_identity = nn.BatchNorm2d(
                 num_features=ins) if ins == outs and stride == 1 else None
-            self.rbr_dense = ConvBn(ins, outs, kernel, stride, auto_pad(
-                kernel, padding), groups=groups)
-            self.rbr_1x1 = ConvBn(
-                ins, outs, kernel=1, stride=stride, padding=padding_11, groups=groups)
+            self.rbr_dense = ConvBn(ins, outs, kernel, stride, auto_pad(kernel, padding), groups=groups)
+            self.rbr_1x1 = ConvBn(ins, outs, kernel=1, stride=stride, padding=padding_11, groups=groups)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         if hasattr(self, "rbr_reparam"):
@@ -310,13 +308,35 @@ class RepConv(nn.Module):
 
         return self.act(self.rbr_dense(x) + self.rbr_1x1(x) + id_out)
 
-    def fuse_repvgg_block(self):
+    def fuse_conv_bn(self, conv, bn) -> nn.Conv2d:
+        std = (bn.running_var + bn.eps).sqrt()
+        bias = bn.bias - bn.running_mean * bn.weight / std
+
+        t = (bn.weight / std).reshape(-1, 1, 1, 1)
+        weights = conv.weight * t
+
+        bn = nn.Identity()
+        conv = nn.Conv2d(in_channels=conv.in_channels,
+                         out_channels=conv.out_channels,
+                         kernel_size=conv.kernel_size,
+                         stride=conv.stride,
+                         padding=conv.padding,
+                         dilation=conv.dilation,
+                         groups=conv.groups,
+                         bias=True,
+                         padding_mode=conv.padding_mode)
+
+        conv.weight = torch.nn.Parameter(weights)
+        conv.bias = torch.nn.Parameter(bias)
+        return conv
+
+    def fuse_repvgg_block(self) -> None:
         if self.deploy:
             return
 
-        self.rbr_dense = fuse_conv_and_bn(
+        self.rbr_dense = self.fuse_conv_bn(
             self.rbr_dense.conv, self.rbr_dense.bn)
-        self.rbr_1x1 = fuse_conv_and_bn(self.rbr_1x1.conv, self.rbr_1x1.bn)
+        self.rbr_1x1 = self.fuse_conv_bn(self.rbr_1x1.conv, self.rbr_1x1.bn)
 
         rbr_1x1_bias = self.rbr_1x1.bias
         weight_1x1_expanded = torch.nn.functional.pad(
@@ -340,7 +360,7 @@ class RepConv(nn.Module):
             identity_conv_1x1.weight.data = identity_conv_1x1.data.unsqueeze(
                 2).unsqueeze(3)
 
-            identity_conv_1x1 = fuse_conv_and_bn(
+            identity_conv_1x1 = self.fuse_conv_bn(
                 identity_conv_1x1, self.rbr_identity)
             bias_identity_expanded = identity_conv_1x1.bias
             weight_identity_expanded = torch.nn.functaionl.pad(
@@ -509,18 +529,17 @@ class Implicit(nn.Module):
     def __init__(
         self,
         channel: int, ops: str = "add",
-        mean: float = 0., std: float = .02
+        mean: float = None, std: float = .02
     ) -> None:
         super().__init__()
         assert ops.lower() in ["add", "multiply"], "Not Implemented Operation!"
 
         self.channel = channel
-        self.mean = mean
-        self.std = std
         self.ops = ops.lower()
+        self.mean = mean if mean else 0 if self.ops == "add" else 1
+        self.std = std
 
-        weight = torch.zeros(
-            1, channel, 1, 1) if self.ops == "add" else torch.ones(1, channel, 1, 1)
+        weight = torch.zeros(1, channel, 1, 1) if self.ops == "add" else torch.ones(1, channel, 1, 1)
 
         self.implicit = nn.Parameter(weight)
         nn.init.normal_(self.implicit, mean=self.mean, std=self.std)

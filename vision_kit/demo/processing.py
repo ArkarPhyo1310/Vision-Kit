@@ -4,6 +4,7 @@ import cv2
 import numpy as np
 import torch
 import torchvision
+
 from vision_kit.utils.bboxes import cxcywh_to_xyxy
 
 
@@ -62,15 +63,13 @@ class ImageProcessor:
             self.img_sz = (self.img_sz, self.img_sz)
 
         # Scale ratio (new / old)
-        self.ratio: float = min(
-            self.img_sz[0] / shape[0], self.img_sz[1] / shape[1])
+        self.ratio: float = min(self.img_sz[0] / shape[0], self.img_sz[1] / shape[1])
         # only scale down, do not scale up (for better val mAP)
         if not self.scaleup:
             self.ratio = min(self.ratio, 1.0)
 
         # Compute padding
-        new_unpad: Tuple[int, int] = int(
-            round(shape[1] * self.ratio)), int(round(shape[0] * self.ratio))
+        new_unpad: Tuple[int, int] = int(round(shape[1] * self.ratio)), int(round(shape[0] * self.ratio))
         dw: int = self.img_sz[1] - new_unpad[0]
         dh: int = self.img_sz[0] - new_unpad[1]  # wh padding
         if self.auto:  # minimum rectangle
