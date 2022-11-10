@@ -7,7 +7,8 @@ from vision_kit.models.backbones import EELAN
 from vision_kit.models.heads import YoloV7Head
 from vision_kit.models.modules.blocks import ConvBnAct, RepConv
 from vision_kit.models.necks import PAFPNELAN
-from vision_kit.utils.model_utils import fuse_conv_and_bn, init_weights
+from vision_kit.utils.model_utils import (fuse_conv_and_bn, init_weights,
+                                          load_ckpt)
 
 
 class YOLOV7(nn.Module):
@@ -37,26 +38,26 @@ class YOLOV7(nn.Module):
         return x
 
     def fuse(self) -> None:
-        for module in [self.backbone, self.neck, self.head]:
-            for m in module.modules():
-                if type(m) is ConvBnAct and hasattr(m, "bn"):
-                    m.conv = fuse_conv_and_bn(m.conv, m.bn)
-                    delattr(m, 'bn')
-                    m.forward = m.forward_fuse
-                elif isinstance(m, RepConv):
-                    m.fuse_repvgg_block()
+        for m in self.modules():
+            if type(m) is ConvBnAct and hasattr(m, "bn"):
+                m.conv = fuse_conv_and_bn(m.conv, m.bn)
+                delattr(m, 'bn')
+                m.forward = m.forward_fuse
+            if isinstance(m, RepConv):
+                m.fuse_repvgg_block()
 
     @staticmethod
     def reparameterization(model: "YOLOV7", ckpt_path: str, exclude: list = []) -> "YOLOV7":
-        ckpt_state_dict = torch.load(ckpt_path, map_location="cpu")
-        # ckpt_state_dict = ckpt.state_dict()
+        ckpt_state_dict = torch.load(ckpt_path, map_location=next(model.parameters()).device)
 
         num_anchors = model.head.num_anchors
         exclude = exclude
 
-        intersect_state_dict = {k: v for k, v in ckpt_state_dict.items() if k in model.state_dict(
-        ) and not any(x in k for x in exclude) and v.shape == model.state_dict()[k].shape}
-        model.load_state_dict(intersect_state_dict, strict=False)
+        # intersect_state_dict = {k: v for k, v in ckpt_state_dict.items() if k in model.state_dict(
+        # ) and not any(x in k for x in exclude) and v.shape == model.state_dict()[k].shape}
+        # model.load_state_dict(intersect_state_dict, strict=False)
+
+        model = load_ckpt(model, ckpt_state_dict)
 
         for i in range((model.head.num_classes + 5) * num_anchors):
             model.state_dict()['head.m.0.weight'].data[i, :, :, :] *= ckpt_state_dict['head.im.0.implicit'].data[:, i, ::].squeeze()

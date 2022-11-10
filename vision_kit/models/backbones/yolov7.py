@@ -1,6 +1,8 @@
 import torch
 from torch import nn
-from vision_kit.models.modules.blocks import ELAN, MP, Concat, ConvBnAct, MPx3Conv
+
+from vision_kit.models.modules.blocks import (ELAN, MP, Concat, ConvBnAct,
+                                              MPx3Conv)
 
 
 class EELAN(nn.Module):
@@ -48,18 +50,16 @@ class EELAN(nn.Module):
             ConvBnAct(
                 base_chs * 2, base_chs * 2,
                 kernel=3, stride=1, act=act
-            )
-        )
-
-        self.stage2 = nn.Sequential(
+            ),
             ConvBnAct(
                 base_chs * 2, base_chs * 4,
                 kernel=3, stride=2, act=act
-            ),
-            ELAN(
-                base_chs * 4,  64, base_chs * 8,
-                depth=elan_depth
             )
+        )
+
+        self.stage2 = ELAN(
+            base_chs * 4,  64, base_chs * 8,
+            depth=elan_depth
         )
         self.stage2_1 = MPx3Conv(base_chs * 8, base_chs * 4)
 
@@ -86,15 +86,15 @@ class EELAN(nn.Module):
 
         p2 = self.stage2(p1)
         p2_1, p2_2 = self.stage2_1(p2)
-        p2_concat = self.concat([p2_1, p2_2])
+        p2_concat = self.concat([p2_2, p2_1])
 
         p3 = self.stage3(p2_concat)
         p3_1, p3_2 = self.stage3_1(p3)
-        p3_concat = self.concat([p3_1, p3_2])
+        p3_concat = self.concat([p3_2, p3_1])
 
         p4 = self.stage4(p3_concat)
         p4_1, p4_2 = self.stage4_1(p4)
-        p4_concat = self.concat([p4_1, p4_2])
+        p4_concat = self.concat([p4_2, p4_1])
 
         p5 = self.stage5(p4_concat)
 

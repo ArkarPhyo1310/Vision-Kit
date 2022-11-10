@@ -38,7 +38,7 @@ def init_bias(module: nn.ModuleList, stride: tuple, na: int, nc: int, cf=None):
     for m, s in zip(module, stride):
         b = m.bias.view(na, -1)
         b.data[:, 4] += math.log(8 / (640 / s) ** 2)
-        b.data[:, 5:] += math.log(0.6 / (nc - 0.999999)
+        b.data[:, 5:] += math.log(0.6 / (nc - 0.99)
                                   ) if cf is None else torch.log(cf / cf.sum())
         m.bias = torch.nn.Parameter(b.view(-1), requires_grad=True)
 
@@ -93,19 +93,15 @@ def fuse_conv_and_bn(conv: nn.Conv2d, bn: nn.BatchNorm2d) -> nn.Conv2d:
     Returns:
         nn.Conv2d: fused convolution behaves the same as the input conv and bn.
     """
-    fusedconv = (
-        nn.Conv2d(
-            conv.in_channels,
-            conv.out_channels,
-            kernel_size=conv.kernel_size,
-            stride=conv.stride,
-            padding=conv.padding,
-            groups=conv.groups,
-            bias=True,
-        )
-        .requires_grad_(False)
-        .to(conv.weight.device)
-    )
+    fusedconv = nn.Conv2d(
+        conv.in_channels,
+        conv.out_channels,
+        kernel_size=conv.kernel_size,
+        stride=conv.stride,
+        padding=conv.padding,
+        groups=conv.groups,
+        bias=True,
+    ).requires_grad_(False).to(conv.weight.device)
 
     # prepare filters
     w_conv = conv.weight.clone().view(conv.out_channels, -1)

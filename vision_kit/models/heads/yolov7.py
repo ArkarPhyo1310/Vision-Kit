@@ -3,7 +3,7 @@ from typing import List
 import torch
 from torch import nn
 
-from vision_kit.models.modules.blocks import Implicit
+from vision_kit.models.modules.blocks import Implicit, ImplicitA, ImplicitM
 from vision_kit.utils.model_utils import (check_anchor_order, init_bias,
                                           meshgrid)
 
@@ -45,12 +45,15 @@ class YoloV7Head(nn.Module):
         self.m = nn.ModuleList(nn.Conv2d(x, self.no * self.num_anchors, 1)
                                for x in in_chs)  # output conv
 
+        # if self.training_mode:
+        #     self.ia = nn.ModuleList(Implicit(x, ops="add") for x in in_chs)
+        #     self.im = nn.ModuleList(
+        #         Implicit(self.no * self.num_anchors, ops="multiply") for _ in in_chs)
         if self.training_mode:
-            self.ia = nn.ModuleList(Implicit(x, ops="add") for x in in_chs)
-            self.im = nn.ModuleList(
-                Implicit(self.no * self.num_anchors, ops="multiply") for _ in in_chs)
-            init_bias(self.m, self.stride, self.num_anchors, self.num_classes)
+            self.ia = nn.ModuleList(ImplicitA(x) for x in in_chs)
+            self.im = nn.ModuleList(ImplicitM(self.no * self.num_anchors) for _ in in_chs)
 
+        init_bias(self.m, self.stride, self.num_anchors, self.num_classes)
         self.export = export
 
     def forward(self, x: tuple[torch.Tensor]):
@@ -77,7 +80,7 @@ class YoloV7Head(nn.Module):
                     # y.tensor_split((2, 4, 5), 4)  # torch 1.8.0
                     xy, wh, conf = y.split((2, 2, self.num_classes + 1), 4)
                     xy = xy * (2. * self.stride[i]) + (self.stride[i] * (self.grid[i] - 0.5))  # new xy
-                    wh = wh ** 2 * (4 * self.anchor_grid[i])  # new wh
+                    wh = wh ** 2 * (4 * self.anchor_grid[i].data)  # new wh
                     y = torch.cat((xy, wh, conf), 4)
                 z.append(y.view(bs, -1, self.no))
 
@@ -151,7 +154,7 @@ class YoloV7Head(nn.Module):
     #         self.m[i].bias *= self.im[i].implicit.reshape(c2)
     #         self.m[i].weight *= self.im[i].implicit.transpose(0, 1)
 
-    @ staticmethod
+    @staticmethod
     def _make_grid(nx=20, ny=20) -> torch.Tensor:
-        yv, xv = torch.meshgrid([torch.arange(ny), torch.arange(nx)])
+        yv, xv = meshgrid([torch.arange(ny), torch.arange(nx)])
         return torch.stack((xv, yv), 2).view((1, 1, ny, nx, 2)).float()

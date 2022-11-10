@@ -292,8 +292,7 @@ class RepConv(nn.Module):
                 bias=True
             )
         else:
-            self.rbr_identity = nn.BatchNorm2d(
-                num_features=ins) if ins == outs and stride == 1 else None
+            self.rbr_identity = nn.BatchNorm2d(num_features=ins) if ins == outs and stride == 1 else None
             self.rbr_dense = ConvBn(ins, outs, kernel, stride, auto_pad(kernel, padding), groups=groups)
             self.rbr_1x1 = ConvBn(ins, outs, kernel=1, stride=stride, padding=padding_11, groups=groups)
 
@@ -334,13 +333,11 @@ class RepConv(nn.Module):
         if self.deploy:
             return
 
-        self.rbr_dense = self.fuse_conv_bn(
-            self.rbr_dense.conv, self.rbr_dense.bn)
+        self.rbr_dense = self.fuse_conv_bn(self.rbr_dense.conv, self.rbr_dense.bn)
         self.rbr_1x1 = self.fuse_conv_bn(self.rbr_1x1.conv, self.rbr_1x1.bn)
 
         rbr_1x1_bias = self.rbr_1x1.bias
-        weight_1x1_expanded = torch.nn.functional.pad(
-            self.rbr_1x1.weight, [1, 1, 1, 1])
+        weight_1x1_expanded = torch.nn.functional.pad(self.rbr_1x1.weight, [1, 1, 1, 1])
 
         if (isinstance(self.rbr_identity, nn.BatchNorm2d) or isinstance(self.rbr_identity, nn.modules.batchnorm.SyncBatchNorm)):
             identity_conv_1x1 = nn.Conv2d(
@@ -352,24 +349,18 @@ class RepConv(nn.Module):
                 groups=self.groups,
                 bias=False
             )
-            identity_conv_1x1.weight.data = identity_conv_1x1.weight.data.to(
-                self.rbr_1x1.weight.data.device)
+            identity_conv_1x1.weight.data = identity_conv_1x1.weight.data.to(self.rbr_1x1.weight.data.device)
             identity_conv_1x1.weight.data = identity_conv_1x1.weight.data.squeeze().squeeze()
             identity_conv_1x1.weight.data.fill_(0.0)
             identity_conv_1x1.weight.data.fill_diagonal_(1.0)
-            identity_conv_1x1.weight.data = identity_conv_1x1.data.unsqueeze(
-                2).unsqueeze(3)
+            identity_conv_1x1.weight.data = identity_conv_1x1.data.unsqueeze(2).unsqueeze(3)
 
-            identity_conv_1x1 = self.fuse_conv_bn(
-                identity_conv_1x1, self.rbr_identity)
+            identity_conv_1x1 = self.fuse_conv_bn(identity_conv_1x1, self.rbr_identity)
             bias_identity_expanded = identity_conv_1x1.bias
-            weight_identity_expanded = torch.nn.functaionl.pad(
-                identity_conv_1x1.weight, [1, 1, 1, 1])
+            weight_identity_expanded = torch.nn.functaionl.pad(identity_conv_1x1.weight, [1, 1, 1, 1])
         else:
-            bias_identity_expanded = torch.nn.Parameter(
-                torch.zeros_like(rbr_1x1_bias))
-            weight_identity_expanded = torch.nn.Parameter(
-                torch.zeros_like(weight_1x1_expanded))
+            bias_identity_expanded = torch.nn.Parameter(torch.zeros_like(rbr_1x1_bias))
+            weight_identity_expanded = torch.nn.Parameter(torch.zeros_like(weight_1x1_expanded))
 
         self.rbr_dense.weight = torch.nn.Parameter(
             self.rbr_dense.weight + weight_1x1_expanded + weight_identity_expanded
@@ -513,16 +504,39 @@ class MPx3Conv(nn.Module):
         self.conv2 = ConvBnAct(ins, outs, 1, 1, act=act)
         self.conv3 = ConvBnAct(outs, outs, 3, 2, act=act)
 
-        # self.concat = Concat()
-
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x_mp = self.max_pool(x)
         x1 = self.conv1(x_mp)
         x2 = self.conv2(x)
         x3 = self.conv3(x2)
 
-        # return self.concat([x3, x1])
-        return (x3, x1)
+        return x3, x1
+
+
+class ImplicitA(nn.Module):
+    def __init__(self, channel, mean=0., std=.02):
+        super(ImplicitA, self).__init__()
+        self.channel = channel
+        self.mean = mean
+        self.std = std
+        self.implicit = nn.Parameter(torch.zeros(1, channel, 1, 1))
+        nn.init.normal_(self.implicit, mean=self.mean, std=self.std)
+
+    def forward(self, x):
+        return self.implicit + x
+
+
+class ImplicitM(nn.Module):
+    def __init__(self, channel, mean=1., std=.02):
+        super(ImplicitM, self).__init__()
+        self.channel = channel
+        self.mean = mean
+        self.std = std
+        self.implicit = nn.Parameter(torch.ones(1, channel, 1, 1))
+        nn.init.normal_(self.implicit, mean=self.mean, std=self.std)
+
+    def forward(self, x):
+        return self.implicit * x
 
 
 class Implicit(nn.Module):
