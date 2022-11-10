@@ -34,9 +34,6 @@ class EELAN(nn.Module):
         base_chs = backbone_cfg[variant.lower()]["base_chs"]
         elan_depth = backbone_cfg[variant.lower()]["elan_depth"]
 
-        self.concat = Concat()
-        # self.max_pool = MP()
-
         self.stem = ConvBnAct(
             ins=3, outs=base_chs,
             kernel=3, stride=1, act=act
@@ -80,21 +77,23 @@ class EELAN(nn.Module):
             depth=elan_depth
         )
 
+        self.concat = Concat()
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.stem(x)
         p1 = self.stage1(x)
 
         p2 = self.stage2(p1)
         p2_1, p2_2 = self.stage2_1(p2)
-        p2_concat = self.concat([p2_2, p2_1])
+        p2_concat = self.concat([p2_1, p2_2])
 
         p3 = self.stage3(p2_concat)
         p3_1, p3_2 = self.stage3_1(p3)
-        p3_concat = self.concat([p3_2, p3_1])
+        p3_concat = self.concat([p3_1, p3_2])
 
         p4 = self.stage4(p3_concat)
         p4_1, p4_2 = self.stage4_1(p4)
-        p4_concat = self.concat([p4_2, p4_1])
+        p4_concat = self.concat([p4_1, p4_2])
 
         p5 = self.stage5(p4_concat)
 

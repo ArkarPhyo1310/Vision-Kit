@@ -46,9 +46,11 @@ model = YOLOV7(training_mode=False).to("cuda")
 # model = YOLOV7.reparameterization(model, "./pretrained_weights/v7training.pt")
 
 
-v7model = torch.hub.load('/home/arkar/ME/yolov7/', 'custom', path_or_model="/home/arkar/ME/yolov7/yolov7_training.pt",
+v7model = torch.hub.load('/home/arkar/ME/yolov7/', 'custom', path_or_model="/home/arkar/ME/yolov7/yolov7.pt",
                          autoshape=False, force_reload=False, source="local", verbose=False)
-model = reparameterization(model, v7model.state_dict())
+# model = reparameterization(model, v7model.state_dict())
+model = load_ckpt(model, v7model.state_dict())
+# model = v7model
 
 model.to("cuda")
 model.fuse()

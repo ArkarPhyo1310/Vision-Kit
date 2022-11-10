@@ -33,9 +33,6 @@ class PAFPNELAN(nn.Module):
         out_chs = neck_cfg[variant.lower()]["out_chs"]
         depth = neck_cfg[variant.lower()]["elan_depth"]
 
-        self.concat = Concat()
-        self.upsample = nn.Upsample(scale_factor=2, mode="nearest")
-
         self.sppcspc = SPPCSPC(in_chs[1], out_chs[1], act=act)
 
         self.lateral_conv = ConvBnAct(
@@ -82,6 +79,9 @@ class PAFPNELAN(nn.Module):
         self.repconv2 = RepConv(int(in_chs[0] / 2), out_chs[1], act=act)
         self.repconv3 = RepConv(in_chs[0], out_chs[2], act=act)
 
+        self.concat = Concat()
+        self.upsample = nn.Upsample(scale_factor=2, mode="nearest")
+
     def forward(self, x: List[torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         p3, p4, p5 = x
 
@@ -90,19 +90,16 @@ class PAFPNELAN(nn.Module):
         fpn_out1 = self.lateral_conv(x_sppcspc)
         f_out1 = self.upsample(fpn_out1)
         r_p4 = self.route_p4(p4)
-        # f_out1 = self.concat([f_out1, r_p4])
         f_out1 = self.concat([r_p4, f_out1])
         f_out1 = self.lateral_elan(f_out1)
 
         fpn_out2 = self.reduce_conv(f_out1)
         f_out2 = self.upsample(fpn_out2)
         r_p3 = self.route_p3(p3)
-        # f_out2 = self.concat([f_out2, r_p3])
         f_out2 = self.concat([r_p3, f_out2])
         pan_out2 = self.reduce_elan(f_out2)
 
         x_79, x_77 = self.mp_3xconvs_1(pan_out2)
-        # p_out1 = self.concat([f_out1, x_77, x_79])
         p_out1 = self.concat([x_79, x_77, f_out1])
         pan_out1 = self.bu_elan1(p_out1)
 

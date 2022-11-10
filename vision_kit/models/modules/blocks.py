@@ -481,7 +481,7 @@ class ELAN(nn.Module):
         if hasattr(self, "conv5"):
             x5 = self.conv5(x4)
             x6 = self.conv6(x5)
-            concat_x = [x6, x5, x3, x1]
+            concat_x = [x6, x4, x2, x1]
             if self.hidden_chs == self.outs:
                 concat_x = [x6, x5, x4, x3, x2, x1]
 
