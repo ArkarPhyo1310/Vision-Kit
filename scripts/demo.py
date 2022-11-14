@@ -42,14 +42,14 @@ def reparameterization(model: "YOLOV7", ckpt_path: str, exclude: list = []) -> "
 
 
 model = YOLOV7(training_mode=False).to("cuda")
-# model.load_state_dict(torch.load("./pretrained_weights/yolov7base.pt"), strict=False)
-# model = YOLOV7.reparameterization(model, "./pretrained_weights/v7training.pt")
+model.load_state_dict(torch.load("./pretrained_weights/yolov7base.pt"), strict=False)
+model = YOLOV7.reparameterization(model, "./pretrained_weights/yolov7_train.pt")
 
 
-v7model = torch.hub.load('/home/arkar/ME/yolov7/', 'custom', path_or_model="/home/arkar/ME/yolov7/yolov7.pt",
-                         autoshape=False, force_reload=False, source="local", verbose=False)
+# v7model = torch.hub.load('/home/myat/ME/yolov7/', 'custom', path_or_model="/home/myat/ME/yolov7/yolov7.pt",
+                        #  autoshape=False, force_reload=False, source="local", verbose=False)
 # model = reparameterization(model, v7model.state_dict())
-model = load_ckpt(model, v7model.state_dict())
+# model = load_ckpt(model, v7model.state_dict())
 # model = v7model
 
 model.to("cuda")

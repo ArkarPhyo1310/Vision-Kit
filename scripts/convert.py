@@ -45,7 +45,7 @@ def convert_yolov7(version: str = "base") -> None:
 
     new_model: Dict[str, Any] = v7model.state_dict()
 
-    modelv7 = torch.hub.load('/home/arkar/ME/yolov7/', 'custom', path_or_model="/home/arkar/ME/yolov7/yolov7.pt",
+    modelv7 = torch.hub.load('/home/myat/ME/yolov7/', 'custom', path_or_model="/home/myat/ME/yolov7/yolov7_training.pt",
                              autoshape=False, force_reload=False, source="local", verbose=False)
     state_dict = modelv7.state_dict()
     state_dict.pop('model.105.anchors', None)
