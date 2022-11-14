@@ -1,4 +1,3 @@
-from copy import deepcopy
 from time import time
 
 import cv2
@@ -8,82 +7,49 @@ from vision_kit.classes.coco import COCO
 from vision_kit.demo.processing import ImageProcessor
 from vision_kit.models.architectures import YOLOV5, YOLOV7
 from vision_kit.utils.drawing import Drawing
-from vision_kit.utils.model_utils import load_ckpt
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
-def reparameterization(model: "YOLOV7", ckpt_path: str, exclude: list = []) -> "YOLOV7":
-    ckpt_state_dict = torch.load(ckpt_path, map_location=next(model.parameters()).device) if isinstance(ckpt_path, str) else ckpt_path
+def load_model(name: str, ckpt: str) -> YOLOV5 | YOLOV7:
+    if name == "YOLOv5":
+        model = YOLOV5(training_mode=False).to(device)
+        model.load_state_dict(torch.load(ckpt, map_location=device), strict=False)
+    elif name == "YOLOv7":
+        model = YOLOV7(training_mode=False).to(device)
+        YOLOV7.reparameterization(model, ckpt)
+    else:
+        raise ValueError(f"{name} is wrong! Must be 'YOLOv5' or 'YOLOv7'.")
 
-    num_anchors = model.head.num_anchors
-    exclude = exclude
+    model.fuse()
+    model.eval()
 
-    # intersect_state_dict = {k: v for k, v in ckpt_state_dict.items() if k in model.state_dict(
-    # ) and not any(x in k for x in exclude) and v.shape == model.state_dict()[k].shape}
-    # model.load_state_dict(intersect_state_dict, strict=False)
-    model = load_ckpt(model, ckpt_state_dict)
-
-    for i in range((model.head.num_classes + 5) * num_anchors):
-        model.state_dict()['head.m.0.weight'].data[i, :, :, :] *= ckpt_state_dict['model.105.im.0.implicit'].data[:, i, ::].squeeze()
-        model.state_dict()['head.m.1.weight'].data[i, :, :, :] *= ckpt_state_dict['model.105.im.1.implicit'].data[:, i, ::].squeeze()
-        model.state_dict()['head.m.2.weight'].data[i, :, :, :] *= ckpt_state_dict['model.105.im.2.implicit'].data[:, i, ::].squeeze()
-    model.state_dict()['head.m.0.bias'].data += ckpt_state_dict['model.105.m.0.weight'].mul(ckpt_state_dict['model.105.ia.0.implicit']).sum(1).squeeze()
-    model.state_dict()['head.m.1.bias'].data += ckpt_state_dict['model.105.m.1.weight'].mul(ckpt_state_dict['model.105.ia.1.implicit']).sum(1).squeeze()
-    model.state_dict()['head.m.2.bias'].data += ckpt_state_dict['model.105.m.2.weight'].mul(ckpt_state_dict['model.105.ia.2.implicit']).sum(1).squeeze()
-    model.state_dict()['head.m.0.bias'].data *= ckpt_state_dict['model.105.im.0.implicit'].data.squeeze()
-    model.state_dict()['head.m.1.bias'].data *= ckpt_state_dict['model.105.im.1.implicit'].data.squeeze()
-    model.state_dict()['head.m.2.bias'].data *= ckpt_state_dict['model.105.im.2.implicit'].data.squeeze()
-
-    re_model = deepcopy(model)
-
-    return re_model
-
-# model: YOLOV5 = YOLOV5(variant="m", num_classes=80, training_mode=False)
-# model.load_state_dict(torch.load("./pretrained_weights/yolov5m.pt"), strict=False)
+    return model
 
 
-model = YOLOV7(training_mode=False).to("cuda")
-model.load_state_dict(torch.load("./pretrained_weights/yolov7base.pt"), strict=False)
-model = YOLOV7.reparameterization(model, "./pretrained_weights/yolov7_train.pt")
+model = load_model("YOLOv7", "./pretrained_weights/yolov7base.pt")
 
-
-# v7model = torch.hub.load('/home/myat/ME/yolov7/', 'custom', path_or_model="/home/myat/ME/yolov7/yolov7.pt",
-                        #  autoshape=False, force_reload=False, source="local", verbose=False)
-# model = reparameterization(model, v7model.state_dict())
-# model = load_ckpt(model, v7model.state_dict())
-# model = v7model
-
-model.to("cuda")
-model.fuse()
-model.eval()
-
-image_processor: ImageProcessor = ImageProcessor(conf_thres=0.2, iou_thres=0.45)
+image_processor: ImageProcessor = ImageProcessor(auto=False)
 drawer: Drawing = Drawing(COCO)
-webcam = cv2.VideoCapture(0)
+dummy_input = cv2.imread("./assets/zidane.jpg")
 
-while True:
-    has_frame, frame = webcam.read()
-    if not has_frame:
-        break
-    dummy_input = frame
-    pre_start_time = time()
-    x, _ = image_processor.preprocess(dummy_input)
-    pre_proc_time = (time() - pre_start_time) * 1e3
+pre_start_time = time()
+x, _ = image_processor.preprocess(dummy_input)
+pre_proc_time = (time() - pre_start_time) * 1e3
 
-    inf_start_time = time()
-    with torch.no_grad():
-        y = model(x.cuda())
-    inf_time = (time() - inf_start_time) * 1e3
+inf_start_time = time()
+with torch.inference_mode():
+    y = model(x.to(device))
+inf_time = (time() - inf_start_time) * 1e3
 
-    post_start_time = time()
-    i = image_processor.postprocess(y[0])
-    dummy_input = drawer.draw(dummy_input, i)
-    post_proc_time = (time() - post_start_time) * 1e3
+post_start_time = time()
+i = image_processor.postprocess(y[0])
+dummy_input = drawer.draw(dummy_input, i)
+post_proc_time = (time() - post_start_time) * 1e3
 
-    print(f"Pre: {pre_proc_time:.1f} ms, Inf: {inf_time:.1f} ms, Post: {post_proc_time:.1f} ms => Total: {(pre_proc_time+inf_time+post_proc_time):.1f} ms")
+print(f"Pre: {pre_proc_time:.1f} ms, Inf: {inf_time:.1f} ms, Post: {post_proc_time:.1f} ms => Total: {(pre_proc_time+inf_time+post_proc_time):.1f} ms")
 
-    cv2.imshow("Demo", dummy_input)
-    key = cv2.waitKey(1)
-    if key == ord("q"):
-        break
-
-cv2.destroyAllWindows()
+cv2.imshow("Demo", dummy_input)
+key = cv2.waitKey(0)
+if key == ord("q"):
+    cv2.destroyAllWindows()

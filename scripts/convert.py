@@ -41,21 +41,20 @@ def convert_yolov7(version: str = "base") -> None:
     assert version in [
         "base", "extra"], f"\"{version}\" is either wrong or unsupported!"
 
-    v7model = YOLOV7(training_mode=True).to("cuda")
+    v7model = YOLOV7(training_mode=True).to("cpu")
+    v7state_dict: Dict[str, Any] = v7model.state_dict()
 
-    new_model: Dict[str, Any] = v7model.state_dict()
-
-    modelv7 = torch.hub.load('/home/myat/ME/yolov7/', 'custom', path_or_model="/home/myat/ME/yolov7/yolov7_training.pt",
+    modelv7 = torch.hub.load('D:/Personal_Projects/yolov7/', 'custom', path_or_model="D:/Personal_Projects/yolov7/yolov7_training.pt",
                              autoshape=False, force_reload=False, source="local", verbose=False)
     state_dict = modelv7.state_dict()
     state_dict.pop('model.105.anchors', None)
     state_dict.pop('model.105.anchor_grid', None)
 
     print("Check Finish")
-    for new, old in zip(new_model.keys(), state_dict.keys()):
-        new_model[new] = state_dict[old]
+    for new, old in zip(v7state_dict.keys(), state_dict.keys()):
+        v7state_dict[new] = state_dict[old]
 
-    v7model.load_state_dict(new_model)
+    v7model.load_state_dict(v7state_dict)
     torch.save(v7model.half().state_dict(),
                f"./pretrained_weights/{model_name}.pt")
 

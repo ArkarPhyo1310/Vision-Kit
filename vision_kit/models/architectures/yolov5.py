@@ -1,5 +1,6 @@
 import torch
 from torch import nn
+from torch.optim import SGD
 from torch.optim.lr_scheduler import LambdaLR
 
 from vision_kit.models.backbones import CSPDarknet
@@ -23,27 +24,20 @@ class YOLOV5(nn.Module):
 
         wid_mul, dep_mul = dw_multiple_generator(variant)
 
-        self.backbone: CSPDarknet = CSPDarknet(
-            depth_mul=dep_mul, width_mul=wid_mul, act=act
-        )
-        self.neck: PAFPN = PAFPN(
-            depth_mul=dep_mul, width_mul=wid_mul, act=act
-        )
-
-        self.head: YoloV5Head = YoloV5Head(
-            num_classes, width=wid_mul, training_mode=training_mode, export=export
-        )
+        self.backbone: CSPDarknet = CSPDarknet(depth_mul=dep_mul, width_mul=wid_mul, act=act)
+        self.neck: PAFPN = PAFPN(depth_mul=dep_mul, width_mul=wid_mul, act=act)
+        self.head: YoloV5Head = YoloV5Head(num_classes, width=wid_mul, training_mode=training_mode, export=export)
 
         init_weights(self)
 
-    def forward(self, x: torch.Tensor):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.backbone(x)
         x = self.neck(x)
         x = self.head(x)
 
         return x
 
-    def fuse(self):
+    def fuse(self) -> None:
         for module in [self.backbone, self.neck, self.head]:
             for m in module.modules():
                 if type(m) is ConvBnAct and hasattr(m, "bn"):
@@ -51,7 +45,7 @@ class YOLOV5(nn.Module):
                     delattr(m, 'bn')
                     m.forward = m.forward_fuse
 
-    def get_optimizer(self, hyp_cfg: dict, max_epochs: int):
+    def get_optimizer(self, hyp_cfg: dict, max_epochs: int) -> tuple[SGD, LambdaLR]:
         g = [], [], []  # optimizer parameter groups
         # normalization layers, i.e. BatchNorm2d()
         bn = tuple(v for k, v in nn.__dict__.items() if 'Norm' in k)
@@ -63,7 +57,7 @@ class YOLOV5(nn.Module):
             elif hasattr(v, 'weight') and isinstance(v.weight, nn.Parameter):  # weight (with decay)
                 g[0].append(v.weight)
 
-        optimizer = torch.optim.SGD(
+        optimizer: SGD = SGD(
             g[2], lr=hyp_cfg.lr0, momentum=hyp_cfg.momentum, nesterov=True)
 
         # add g0 with weight_decay
@@ -74,7 +68,7 @@ class YOLOV5(nn.Module):
 
         def lf(x): return (1 - x / max_epochs) * \
             (1.0 - hyp_cfg['lrf']) + hyp_cfg['lrf']  # linear
-        lr_scheduler = LambdaLR(optimizer, lr_lambda=lf)
+        lr_scheduler: LambdaLR = LambdaLR(optimizer, lr_lambda=lf)
 
         return optimizer, lr_scheduler
 

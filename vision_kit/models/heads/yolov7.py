@@ -3,7 +3,7 @@ from typing import List, Tuple
 import torch
 from torch import nn
 
-from vision_kit.models.modules.blocks import Implicit, ImplicitA, ImplicitM
+from vision_kit.models.modules.blocks import Implicit
 from vision_kit.utils.model_utils import (check_anchor_order, init_bias,
                                           meshgrid)
 
@@ -40,23 +40,20 @@ class YoloV7Head(nn.Module):
         self.anchor_grid = self.anchors.clone().view(self.num_det_layers, 1, -1, 1, 1, 2)
 
         self.anchors /= self.stride.view(-1, 1, 1)
-        self.anchors = check_anchor_order(self.anchors, self.stride)
+        self.anchors: torch.Tensor = check_anchor_order(self.anchors, self.stride)
 
-        self.m = nn.ModuleList(nn.Conv2d(x, self.no * self.num_anchors, 1)
-                               for x in in_chs)  # output conv
+        self.m: nn.ModuleList = nn.ModuleList(nn.Conv2d(x, self.no * self.num_anchors, 1)
+                                              for x in in_chs)  # output conv
 
-        # if self.training_mode:
-        #     self.ia = nn.ModuleList(Implicit(x, ops="add") for x in in_chs)
-        #     self.im = nn.ModuleList(
-        #         Implicit(self.no * self.num_anchors, ops="multiply") for _ in in_chs)
         if self.training_mode:
-            self.ia = nn.ModuleList(ImplicitA(x) for x in in_chs)
-            self.im = nn.ModuleList(ImplicitM(self.no * self.num_anchors) for _ in in_chs)
+            self.ia: nn.ModuleList = nn.ModuleList(Implicit(x, ops="add") for x in in_chs)
+            self.im: nn.ModuleList = nn.ModuleList(
+                Implicit(self.no * self.num_anchors, ops="multiply") for _ in in_chs)
 
         init_bias(self.m, self.stride, self.num_anchors, self.num_classes)
-        self.export = export
+        self.export: bool = export
 
-    def forward(self, x: Tuple[torch.Tensor]):
+    def forward(self, x: Tuple[torch.Tensor]) -> Tuple[Tensor] | tuple[Tensor, Tuple[Tensor]]:
         # x = x.copy()  # for profiling
         z = []  # inference output
         x = list(x)

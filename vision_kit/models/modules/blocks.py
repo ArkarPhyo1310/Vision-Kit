@@ -1,5 +1,5 @@
 import math
-from typing import Any, List
+from typing import Any, List, Literal
 
 import numpy as np
 import torch
@@ -112,7 +112,7 @@ class DWConvTranspose2d(nn.ConvTranspose2d):
 class Concat(nn.Module):
     def __init__(self, dimension: int = 1) -> None:
         super().__init__()
-        self.dim = dimension
+        self.dim: int = dimension
 
     def forward(self, x: List[torch.Tensor]) -> torch.Tensor:
         return torch.cat(x, self.dim)
@@ -121,7 +121,7 @@ class Concat(nn.Module):
 class MP(nn.Module):
     def __init__(self, kernel: int = 2) -> None:
         super().__init__()
-        self.mp = nn.MaxPool2d(kernel_size=kernel, stride=kernel)
+        self.mp: nn.MaxPool2d = nn.MaxPool2d(kernel_size=kernel, stride=kernel)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.mp(x)
@@ -130,7 +130,7 @@ class MP(nn.Module):
 class SP(nn.Module):
     def __init__(self, kernel: int = 3, stride: int = 1) -> None:
         super().__init__()
-        self.mp = nn.MaxPool2d(
+        self.mp: nn.MaxPool2d = nn.MaxPool2d(
             kernel_size=kernel, stride=stride, padding=kernel//2)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -210,44 +210,44 @@ class SPPCSPC(nn.Module):
         kernel: tuple = (5, 9, 13), act: str = "silu"
     ) -> None:
         super().__init__()
-        hidden_chs = int(2 * outs * epsilon)
-        self.conv1 = ConvBnAct(
+        hidden_chs: int = int(2 * outs * epsilon)
+        self.conv1: ConvBnAct = ConvBnAct(
             ins, hidden_chs,
             kernel=1, stride=1,
             groups=groups, act=act
         )
-        self.conv2 = ConvBnAct(
+        self.conv2: ConvBnAct = ConvBnAct(
             ins, hidden_chs,
             kernel=1, stride=1,
             groups=groups, act=act
         )
-        self.conv3 = ConvBnAct(
+        self.conv3: ConvBnAct = ConvBnAct(
             hidden_chs, hidden_chs,
             kernel=3, stride=1,
             groups=groups, act=act
         )
-        self.conv4 = ConvBnAct(
+        self.conv4: ConvBnAct = ConvBnAct(
             hidden_chs, hidden_chs,
             kernel=1, stride=1,
             groups=groups, act=act
         )
-        self.conv5 = ConvBnAct(
+        self.conv5: ConvBnAct = ConvBnAct(
             4 * hidden_chs, hidden_chs,
             kernel=1, stride=1,
             groups=groups, act=act
         )
-        self.conv6 = ConvBnAct(
+        self.conv6: ConvBnAct = ConvBnAct(
             hidden_chs, hidden_chs,
             kernel=3, stride=1,
             groups=groups, act=act
         )
-        self.conv7 = ConvBnAct(
+        self.conv7: ConvBnAct = ConvBnAct(
             2 * hidden_chs, outs,
             kernel=1, stride=1,
             groups=groups, act=act
         )
 
-        self.mp_modules = nn.ModuleList(
+        self.mp_modules: nn.ModuleList = nn.ModuleList(
             [
                 nn.MaxPool2d(kernel_size=x, stride=1, padding=x // 2)
                 for x in kernel
@@ -279,22 +279,22 @@ class RepConv(nn.Module):
 
         padding_11 = auto_pad(kernel, padding) - kernel // 2
 
-        self.deploy = deploy
-        self.groups = groups
-        self.ins = ins
-        self.outs = outs
+        self.deploy: bool = deploy
+        self.groups: int = groups
+        self.ins: int = ins
+        self.outs: int = outs
         self.act = get_act_layer(act)
 
         if deploy:
-            self.rbr_reparam = nn.Conv2d(
+            self.rbr_reparam: nn.Conv2d = nn.Conv2d(
                 ins, outs, kernel_size=kernel, stride=stride,
                 padding=auto_pad(kernel, padding), groups=groups,
                 bias=True
             )
         else:
-            self.rbr_identity = nn.BatchNorm2d(num_features=ins) if ins == outs and stride == 1 else None
-            self.rbr_dense = ConvBn(ins, outs, kernel, stride, auto_pad(kernel, padding), groups=groups)
-            self.rbr_1x1 = ConvBn(ins, outs, kernel=1, stride=stride, padding=padding_11, groups=groups)
+            self.rbr_identity: nn.BatchNorm2d | None = nn.BatchNorm2d(num_features=ins) if ins == outs and stride == 1 else None
+            self.rbr_dense: ConvBn = ConvBn(ins, outs, kernel, stride, auto_pad(kernel, padding), groups=groups)
+            self.rbr_1x1: ConvBn = ConvBn(ins, outs, kernel=1, stride=stride, padding=padding_11, groups=groups)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         if hasattr(self, "rbr_reparam"):
@@ -307,34 +307,12 @@ class RepConv(nn.Module):
 
         return self.act(self.rbr_dense(x) + self.rbr_1x1(x) + id_out)
 
-    def fuse_conv_bn(self, conv, bn) -> nn.Conv2d:
-        std = (bn.running_var + bn.eps).sqrt()
-        bias = bn.bias - bn.running_mean * bn.weight / std
-
-        t = (bn.weight / std).reshape(-1, 1, 1, 1)
-        weights = conv.weight * t
-
-        bn = nn.Identity()
-        conv = nn.Conv2d(in_channels=conv.in_channels,
-                         out_channels=conv.out_channels,
-                         kernel_size=conv.kernel_size,
-                         stride=conv.stride,
-                         padding=conv.padding,
-                         dilation=conv.dilation,
-                         groups=conv.groups,
-                         bias=True,
-                         padding_mode=conv.padding_mode)
-
-        conv.weight = torch.nn.Parameter(weights)
-        conv.bias = torch.nn.Parameter(bias)
-        return conv
-
     def fuse_repvgg_block(self) -> None:
         if self.deploy:
             return
 
-        self.rbr_dense = self.fuse_conv_bn(self.rbr_dense.conv, self.rbr_dense.bn)
-        self.rbr_1x1 = self.fuse_conv_bn(self.rbr_1x1.conv, self.rbr_1x1.bn)
+        self.rbr_dense = fuse_conv_and_bn(self.rbr_dense.conv, self.rbr_dense.bn)
+        self.rbr_1x1 = fuse_conv_and_bn(self.rbr_1x1.conv, self.rbr_1x1.bn)
 
         rbr_1x1_bias = self.rbr_1x1.bias
         weight_1x1_expanded = torch.nn.functional.pad(self.rbr_1x1.weight, [1, 1, 1, 1])
@@ -355,12 +333,12 @@ class RepConv(nn.Module):
             identity_conv_1x1.weight.data.fill_diagonal_(1.0)
             identity_conv_1x1.weight.data = identity_conv_1x1.data.unsqueeze(2).unsqueeze(3)
 
-            identity_conv_1x1 = self.fuse_conv_bn(identity_conv_1x1, self.rbr_identity)
+            identity_conv_1x1 = fuse_conv_and_bn(identity_conv_1x1, self.rbr_identity)
             bias_identity_expanded = identity_conv_1x1.bias
             weight_identity_expanded = torch.nn.functaionl.pad(identity_conv_1x1.weight, [1, 1, 1, 1])
         else:
-            bias_identity_expanded = torch.nn.Parameter(torch.zeros_like(rbr_1x1_bias))
-            weight_identity_expanded = torch.nn.Parameter(torch.zeros_like(weight_1x1_expanded))
+            bias_identity_expanded = nn.Parameter(torch.zeros_like(rbr_1x1_bias))
+            weight_identity_expanded = nn.Parameter(torch.zeros_like(weight_1x1_expanded))
 
         self.rbr_dense.weight = torch.nn.Parameter(
             self.rbr_dense.weight + weight_1x1_expanded + weight_identity_expanded
@@ -430,44 +408,44 @@ class ELAN(nn.Module):
         assert depth % 2 == 0, "Depth is not multiple of 2."
         chs_mul = 5 if depth == 6 else 4
 
-        self.hidden_chs = hidden_chs
-        self.outs = outs
+        self.hidden_chs: int = hidden_chs
+        self.outs: int = outs
 
-        self.conv1 = ConvBnAct(ins, hidden_chs, act=act)
-        self.conv2 = ConvBnAct(ins, hidden_chs, act=act)
+        self.conv1: ConvBnAct = ConvBnAct(ins, hidden_chs, act=act)
+        self.conv2: ConvBnAct = ConvBnAct(ins, hidden_chs, act=act)
 
         if hidden_chs == outs:
-            hidden_ch1 = hidden_chs
-            hidden_ch2 = int(hidden_chs / 2)
+            hidden_ch1: int = hidden_chs
+            hidden_ch2: int = int(hidden_chs / 2)
         else:
             hidden_ch1 = hidden_ch2 = hidden_chs
 
         if depth >= 2:
-            self.conv3 = ConvBnAct(
+            self.conv3: ConvBnAct = ConvBnAct(
                 hidden_ch1, hidden_ch2, kernel=3, stride=1, act=act
             )
-            self.conv4 = ConvBnAct(
+            self.conv4: ConvBnAct = ConvBnAct(
                 hidden_ch2, hidden_ch2, kernel=3, stride=1, act=act
             )
 
         if depth >= 4:
-            self.conv5 = ConvBnAct(
+            self.conv5: ConvBnAct = ConvBnAct(
                 hidden_ch2, hidden_ch2, kernel=3, stride=1, act=act
             )
-            self.conv6 = ConvBnAct(
+            self.conv6: ConvBnAct = ConvBnAct(
                 hidden_ch2, hidden_ch2, kernel=3, stride=1, act=act
             )
 
         if depth >= 6:
-            self.conv7 = ConvBnAct(
+            self.conv7: ConvBnAct = ConvBnAct(
                 hidden_ch2, hidden_ch2, kernel=3, stride=1, act=act
             )
-            self.conv8 = ConvBnAct(
+            self.conv8: ConvBnAct = ConvBnAct(
                 hidden_ch2, hidden_ch2, kernel=3, stride=1, act=act
             )
 
-        self.concat = Concat()
-        self.last_conv = ConvBnAct(hidden_chs * chs_mul, outs, act=act)
+        self.concat: Concat = Concat()
+        self.last_conv: ConvBnAct = ConvBnAct(hidden_chs * chs_mul, outs, act=act)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x1 = self.conv1(x)
@@ -498,11 +476,11 @@ class MPx3Conv(nn.Module):
         self, ins: int, outs: int, act: str = "silu"
     ) -> None:
         super().__init__()
-        self.max_pool = MP()
+        self.max_pool: MP = MP()
 
-        self.conv1 = ConvBnAct(ins, outs, 1, 1, act=act)
-        self.conv2 = ConvBnAct(ins, outs, 1, 1, act=act)
-        self.conv3 = ConvBnAct(outs, outs, 3, 2, act=act)
+        self.conv1: ConvBnAct = ConvBnAct(ins, outs, 1, 1, act=act)
+        self.conv2: ConvBnAct = ConvBnAct(ins, outs, 1, 1, act=act)
+        self.conv3: ConvBnAct = ConvBnAct(outs, outs, 3, 2, act=act)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x_mp = self.max_pool(x)
@@ -511,32 +489,6 @@ class MPx3Conv(nn.Module):
         x3 = self.conv3(x2)
 
         return x3, x1
-
-
-class ImplicitA(nn.Module):
-    def __init__(self, channel, mean=0., std=.02):
-        super(ImplicitA, self).__init__()
-        self.channel = channel
-        self.mean = mean
-        self.std = std
-        self.implicit = nn.Parameter(torch.zeros(1, channel, 1, 1))
-        nn.init.normal_(self.implicit, mean=self.mean, std=self.std)
-
-    def forward(self, x):
-        return self.implicit + x
-
-
-class ImplicitM(nn.Module):
-    def __init__(self, channel, mean=1., std=.02):
-        super(ImplicitM, self).__init__()
-        self.channel = channel
-        self.mean = mean
-        self.std = std
-        self.implicit = nn.Parameter(torch.ones(1, channel, 1, 1))
-        nn.init.normal_(self.implicit, mean=self.mean, std=self.std)
-
-    def forward(self, x):
-        return self.implicit * x
 
 
 class Implicit(nn.Module):
@@ -548,14 +500,14 @@ class Implicit(nn.Module):
         super().__init__()
         assert ops.lower() in ["add", "multiply"], "Not Implemented Operation!"
 
-        self.channel = channel
-        self.ops = ops.lower()
-        self.mean = mean if mean else 0 if self.ops == "add" else 1
-        self.std = std
+        self.channel: int = channel
+        self.ops: str = ops.lower()
+        self.mean: float | Literal[0, 1] = mean if mean else 0.0 if self.ops == "add" else 1.0
+        self.std: float = std
 
-        weight = torch.zeros(1, channel, 1, 1) if self.ops == "add" else torch.ones(1, channel, 1, 1)
+        weight: torch.Tensor = torch.zeros(1, channel, 1, 1) if self.ops == "add" else torch.ones(1, channel, 1, 1)
 
-        self.implicit = nn.Parameter(weight)
+        self.implicit: nn.Parameter = nn.Parameter(weight)
         nn.init.normal_(self.implicit, mean=self.mean, std=self.std)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:

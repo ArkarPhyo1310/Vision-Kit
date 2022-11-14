@@ -5,7 +5,7 @@ from vision_kit.models.modules.blocks import (ELAN, MP, Concat, ConvBnAct,
                                               MPx3Conv)
 
 
-class EELAN(nn.Module):
+class v7Backbone(nn.Module):
     def __init__(
         self,
         variant: str = "base",
@@ -16,7 +16,7 @@ class EELAN(nn.Module):
         assert variant.lower() in ["tiny", "base",
                                    "extra"], f"Not supported version: {variant}!"
 
-        backbone_cfg = {
+        backbone_cfg: dict[str, dict[str, int]] = {
             "tiny": {
                 "base_chs": 32,
                 "elan_depth": 2
@@ -31,15 +31,15 @@ class EELAN(nn.Module):
             },
         }
 
-        base_chs = backbone_cfg[variant.lower()]["base_chs"]
-        elan_depth = backbone_cfg[variant.lower()]["elan_depth"]
+        base_chs: int = backbone_cfg[variant.lower()]["base_chs"]
+        elan_depth: int = backbone_cfg[variant.lower()]["elan_depth"]
 
-        self.stem = ConvBnAct(
+        self.stem: ConvBnAct = ConvBnAct(
             ins=3, outs=base_chs,
             kernel=3, stride=1, act=act
         )
 
-        self.stage1 = nn.Sequential(
+        self.stage1: nn.Sequential = nn.Sequential(
             ConvBnAct(
                 base_chs, base_chs * 2,
                 kernel=3, stride=2, act=act
@@ -54,33 +54,33 @@ class EELAN(nn.Module):
             )
         )
 
-        self.stage2 = ELAN(
+        self.stage2: ELAN = ELAN(
             base_chs * 4,  64, base_chs * 8,
             depth=elan_depth
         )
-        self.stage2_1 = MPx3Conv(base_chs * 8, base_chs * 4)
+        self.stage2_1: MPx3Conv = MPx3Conv(base_chs * 8, base_chs * 4)
 
-        self.stage3 = ELAN(
+        self.stage3: ELAN = ELAN(
             base_chs * 8, 128, base_chs * 16,
             depth=elan_depth
         )
-        self.stage3_1 = MPx3Conv(base_chs * 16, base_chs * 8)
+        self.stage3_1: MPx3Conv = MPx3Conv(base_chs * 16, base_chs * 8)
 
-        self.stage4 = ELAN(
+        self.stage4: ELAN = ELAN(
             base_chs * 16, 256, base_chs * 32,
             depth=elan_depth
         )
-        self.stage4_1 = MPx3Conv(base_chs * 32, base_chs * 16)
+        self.stage4_1: MPx3Conv = MPx3Conv(base_chs * 32, base_chs * 16)
 
-        self.stage5 = ELAN(
+        self.stage5: ELAN = ELAN(
             base_chs * 32, 256, base_chs * 32,
             depth=elan_depth
         )
 
-        self.concat = Concat()
+        self.concat: Concat = Concat()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = self.stem(x)
+        x: torch.Tensor = self.stem(x)
         p1 = self.stage1(x)
 
         p2 = self.stage2(p1)
@@ -101,7 +101,7 @@ class EELAN(nn.Module):
 
 
 if __name__ == "__main__":
-    backbone = EELAN()
+    backbone = v7Backbone()
     img = torch.rand(1, 3, 640, 640)
     for y in backbone(img):
         print(y.shape)

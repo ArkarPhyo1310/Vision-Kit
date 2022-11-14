@@ -3,7 +3,7 @@ from copy import deepcopy
 import torch
 from torch import nn
 
-from vision_kit.models.backbones import EELAN
+from vision_kit.models.backbones import v7Backbone
 from vision_kit.models.heads import YoloV7Head
 from vision_kit.models.modules.blocks import ConvBnAct, RepConv
 from vision_kit.models.necks import PAFPNELAN
@@ -24,7 +24,7 @@ class YOLOV7(nn.Module):
 
         self.training_mode = training_mode
 
-        self.backbone = EELAN(variant, act=act)
+        self.backbone = v7Backbone(variant, act=act)
         self.neck = PAFPNELAN(variant, act=act)
         self.head = YoloV7Head(num_classes=num_classes, export=export, training_mode=training_mode)
 
@@ -48,31 +48,26 @@ class YOLOV7(nn.Module):
 
     @staticmethod
     def reparameterization(model: "YOLOV7", ckpt_path: str, exclude: list = []) -> "YOLOV7":
-        ckpt_state_dict = torch.load(ckpt_path, map_location=next(model.parameters()).device)
+        ckpt_state_dict = torch.load(ckpt_path, map_location=next(model.parameters()).device) if isinstance(ckpt_path, str) else ckpt_path
 
         num_anchors = model.head.num_anchors
         exclude = exclude
 
-        # intersect_state_dict = {k: v for k, v in ckpt_state_dict.items() if k in model.state_dict(
-        # ) and not any(x in k for x in exclude) and v.shape == model.state_dict()[k].shape}
-        # model.load_state_dict(intersect_state_dict, strict=False)
-
         model = load_ckpt(model, ckpt_state_dict)
 
-        for i in range((model.head.num_classes + 5) * num_anchors):
-            model.state_dict()['head.m.0.weight'].data[i, :, :, :] *= ckpt_state_dict['head.im.0.implicit'].data[:, i, ::].squeeze()
-            model.state_dict()['head.m.1.weight'].data[i, :, :, :] *= ckpt_state_dict['head.im.1.implicit'].data[:, i, ::].squeeze()
-            model.state_dict()['head.m.2.weight'].data[i, :, :, :] *= ckpt_state_dict['head.im.2.implicit'].data[:, i, ::].squeeze()
-        model.state_dict()['head.m.0.bias'].data += ckpt_state_dict['head.m.0.weight'].mul(ckpt_state_dict['head.ia.0.implicit']).sum(1).squeeze()
-        model.state_dict()['head.m.1.bias'].data += ckpt_state_dict['head.m.1.weight'].mul(ckpt_state_dict['head.ia.1.implicit']).sum(1).squeeze()
-        model.state_dict()['head.m.2.bias'].data += ckpt_state_dict['head.m.2.weight'].mul(ckpt_state_dict['head.ia.2.implicit']).sum(1).squeeze()
-        model.state_dict()['head.m.0.bias'].data *= ckpt_state_dict['head.im.0.implicit'].data.squeeze()
-        model.state_dict()['head.m.1.bias'].data *= ckpt_state_dict['head.im.1.implicit'].data.squeeze()
-        model.state_dict()['head.m.2.bias'].data *= ckpt_state_dict['head.im.2.implicit'].data.squeeze()
-
-        re_model = deepcopy(model)
-
-        return re_model
+        if 'head.im.0.implicit' in ckpt_state_dict.keys():
+            for i in range((model.head.num_classes + 5) * num_anchors):
+                model.state_dict()['head.m.0.weight'].data[i, :, :, :] *= ckpt_state_dict['head.im.0.implicit'].data[:, i, ::].squeeze()
+                model.state_dict()['head.m.1.weight'].data[i, :, :, :] *= ckpt_state_dict['head.im.1.implicit'].data[:, i, ::].squeeze()
+                model.state_dict()['head.m.2.weight'].data[i, :, :, :] *= ckpt_state_dict['head.im.2.implicit'].data[:, i, ::].squeeze()
+            model.state_dict()['head.m.0.bias'].data += ckpt_state_dict['head.m.0.weight'].mul(ckpt_state_dict['head.ia.0.implicit']).sum(1).squeeze()
+            model.state_dict()['head.m.1.bias'].data += ckpt_state_dict['head.m.1.weight'].mul(ckpt_state_dict['head.ia.1.implicit']).sum(1).squeeze()
+            model.state_dict()['head.m.2.bias'].data += ckpt_state_dict['head.m.2.weight'].mul(ckpt_state_dict['head.ia.2.implicit']).sum(1).squeeze()
+            model.state_dict()['head.m.0.bias'].data *= ckpt_state_dict['head.im.0.implicit'].data.squeeze()
+            model.state_dict()['head.m.1.bias'].data *= ckpt_state_dict['head.im.1.implicit'].data.squeeze()
+            model.state_dict()['head.m.2.bias'].data *= ckpt_state_dict['head.im.2.implicit'].data.squeeze()
+        else:
+            print("Model is already reparameterized!")
 
 
 if __name__ == "__main__":
