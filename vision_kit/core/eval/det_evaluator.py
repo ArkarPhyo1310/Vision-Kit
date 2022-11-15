@@ -3,6 +3,7 @@ from typing import Tuple
 import numpy as np
 import torch
 from torchvision.ops.boxes import box_iou
+
 from vision_kit.utils.bboxes import cxcywh_to_xyxy, xyxy_to_xywh
 from vision_kit.utils.image_proc import scale_coords
 from vision_kit.utils.metrics import smooth
@@ -178,7 +179,14 @@ class DetEvaluator:
             predictions.append(predn)
             detections.append(targetn)
 
-        return torch.vstack(predictions), torch.vstack(detections)
+        if len(predictions) == 0:
+            pred_res = torch.tensor([], device=self.device)
+            det_res = torch.tensor([], device=self.device)
+        else:
+            pred_res = torch.vstack(predictions)
+            det_res = torch.vstack(detections)
+
+        return pred_res, det_res
 
     def summarize(self, details_per_class: bool = False, do_coco_eval: bool = False):
         self.stats = [torch.cat(x, 0).cpu().numpy() for x in zip(*self.stats)]

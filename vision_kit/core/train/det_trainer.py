@@ -182,32 +182,32 @@ class DetTrainer(TrainingModule):
         logger.info(self.mAR_table.table)
 
     def configure_optimizers(self):
-        # g = [], [], []  # optimizer parameter groups
-        # # normalization layers, i.e. BatchNorm2d()
-        # bn = tuple(v for k, v in nn.__dict__.items() if 'Norm' in k)
-        # for v in self.model.modules():
-        #     if hasattr(v, 'bias') and isinstance(v.bias, nn.Parameter):  # bias (no decay)
-        #         g[2].append(v.bias)
-        #     if isinstance(v, bn):  # weight (no decay)
-        #         g[1].append(v.weight)
-        #     elif hasattr(v, 'weight') and isinstance(v.weight, nn.Parameter):  # weight (with decay)
-        #         g[0].append(v.weight)
+        g = [], [], []  # optimizer parameter groups
+        # normalization layers, i.e. BatchNorm2d()
+        bn = tuple(v for k, v in nn.__dict__.items() if 'Norm' in k)
+        for v in self.model.modules():
+            if hasattr(v, 'bias') and isinstance(v.bias, nn.Parameter):  # bias (no decay)
+                g[2].append(v.bias)
+            if isinstance(v, bn):  # weight (no decay)
+                g[1].append(v.weight)
+            elif hasattr(v, 'weight') and isinstance(v.weight, nn.Parameter):  # weight (with decay)
+                g[0].append(v.weight)
 
-        # optimizer = torch.optim.SGD(
-        #     g[2], lr=self.hyp_cfg.lr0, momentum=self.hyp_cfg.momentum, nesterov=True)
+        optimizer = torch.optim.SGD(
+            g[2], lr=self.hyp_cfg.lr0, momentum=self.hyp_cfg.momentum, nesterov=True)
 
-        # # add g0 with weight_decay
-        # optimizer.add_param_group(
-        #     {'params': g[0], 'weight_decay': self.hyp_cfg.weight_decay})
-        # # add g1 (BatchNorm2d weights)
-        # optimizer.add_param_group({'params': g[1], 'weight_decay': 0.0})
+        # add g0 with weight_decay
+        optimizer.add_param_group(
+            {'params': g[0], 'weight_decay': self.hyp_cfg.weight_decay})
+        # add g1 (BatchNorm2d weights)
+        optimizer.add_param_group({'params': g[1], 'weight_decay': 0.0})
 
-        # def lf(x): return (1 - x / self.data_cfg.max_epochs) * \
-        #     (1.0 - self.hyp_cfg['lrf']) + self.hyp_cfg['lrf']  # linear
-        # lr_scheduler = LambdaLR(optimizer, lr_lambda=lf)
+        def lf(x): return (1 - x / self.data_cfg.max_epochs) * \
+            (1.0 - self.hyp_cfg['lrf']) + self.hyp_cfg['lrf']  # linear
+        lr_scheduler = LambdaLR(optimizer, lr_lambda=lf)
 
-        optimizer, lr_scheduler = self.model.get_optimizer(
-            self.hyp_cfg, self.data_cfg.max_epochs)
+        # optimizer, lr_scheduler = self.model.get_optimizer(
+        #     self.hyp_cfg, self.data_cfg.max_epochs)
 
         return [optimizer], [lr_scheduler]
 

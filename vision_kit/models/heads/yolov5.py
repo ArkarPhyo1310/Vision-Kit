@@ -71,7 +71,7 @@ class YoloV5Head(nn.Module):
                         nx, ny, i)
 
                 y = x[i].sigmoid().to(self.device)
-                if not torch.onnx.is_in_onnx_export():
+                if not self.export:
                     y[..., 0:2] = (y[..., 0:2] * 2 + self.grid[i]) * self.stride[i]  # xy
                     y[..., 2:4] = (y[..., 2:4] * 2) ** 2 * self.anchor_grid[i]  # wh
                 else:

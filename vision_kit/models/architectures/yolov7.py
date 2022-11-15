@@ -1,7 +1,10 @@
+import math
 from copy import deepcopy
 
 import torch
 from torch import nn
+from torch.optim import SGD
+from torch.optim.lr_scheduler import LambdaLR
 
 from vision_kit.models.backbones import v7Backbone
 from vision_kit.models.heads import YoloV7Head
@@ -24,9 +27,9 @@ class YOLOV7(nn.Module):
 
         self.training_mode = training_mode
 
-        self.backbone = v7Backbone(variant, act=act)
-        self.neck = PAFPNELAN(variant, act=act)
-        self.head = YoloV7Head(num_classes=num_classes, export=export, training_mode=training_mode)
+        self.backbone: v7Backbone = v7Backbone(variant, act=act)
+        self.neck: PAFPNELAN = PAFPNELAN(variant, act=act)
+        self.head: YoloV7Head = YoloV7Head(num_classes=num_classes, export=export, training_mode=training_mode)
 
         init_weights(self)
 
@@ -45,6 +48,38 @@ class YOLOV7(nn.Module):
                 m.forward = m.forward_fuse
             if isinstance(m, RepConv):
                 m.fuse_repvgg_block()
+
+    def get_optimizer(self, hyp_cfg: dict, max_epochs: int) -> tuple[SGD, LambdaLR]:
+        pg0, pg1, pg2 = [], [], []  # optimizer parameter groups
+        for k, v in self.named_modules():
+            if hasattr(v, 'bias') and isinstance(v.bias, nn.Parameter):
+                pg2.append(v.bias)
+            if isinstance(v, nn.BatchNorm2d):
+                pg0.append(v.weight)
+            elif hasattr(v, 'weight') and isinstance(v.weight, nn.Parameter):
+                pg1.append(v.weight)
+
+            if hasattr(v, 'im'):
+                if hasattr(v.im, 'implicit'):
+                    pg0.append(v.im.implicit)
+                else:
+                    for iv in v.im:
+                        pg0.append(iv.implicit)
+            if hasattr(v, 'ia'):
+                if hasattr(v.ia, 'implicit'):
+                    pg0.append(v.ia.implicit)
+                else:
+                    for iv in v.ia:
+                        pg0.append(iv.implicit)
+
+        optimizer: SGD = SGD(pg0, lr=hyp_cfg.lr0, momentum=hyp_cfg.momentum, nesterov=True)
+        optimizer.add_param_group({'params': pg1, 'weight_decay': hyp_cfg.weight_decay})
+        optimizer.add_param_group({'params': pg2})
+
+        def lf(x): return ((1 - math.cos(x * math.pi / max_epochs)) / 2) * (hyp_cfg.lrf - 1) + 1
+        scheduler: LambdaLR = LambdaLR(optimizer=optimizer, lr_lambda=lf)
+
+        return optimizer, scheduler
 
     @staticmethod
     def reparameterization(model: "YOLOV7", ckpt_path: str, exclude: list = []) -> "YOLOV7":

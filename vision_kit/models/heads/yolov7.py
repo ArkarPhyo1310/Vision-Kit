@@ -53,7 +53,7 @@ class YoloV7Head(nn.Module):
         init_bias(self.m, self.stride, self.num_anchors, self.num_classes)
         self.export: bool = export
 
-    def forward(self, x: Tuple[torch.Tensor]) -> Tuple[Tensor] | tuple[Tensor, Tuple[Tensor]]:
+    def forward(self, x: Tuple[torch.Tensor]) -> Tuple[torch.Tensor] | tuple[torch.Tensor, Tuple[torch.Tensor]]:
         # x = x.copy()  # for profiling
         z = []  # inference output
         x = list(x)

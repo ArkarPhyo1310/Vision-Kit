@@ -49,6 +49,7 @@ class YOLOV5(nn.Module):
         g = [], [], []  # optimizer parameter groups
         # normalization layers, i.e. BatchNorm2d()
         bn = tuple(v for k, v in nn.__dict__.items() if 'Norm' in k)
+        # for module in [self.backbone, self.neck, self.head]:
         for v in self.modules():
             if hasattr(v, 'bias') and isinstance(v.bias, nn.Parameter):  # bias (no decay)
                 g[2].append(v.bias)
@@ -57,12 +58,10 @@ class YOLOV5(nn.Module):
             elif hasattr(v, 'weight') and isinstance(v.weight, nn.Parameter):  # weight (with decay)
                 g[0].append(v.weight)
 
-        optimizer: SGD = SGD(
-            g[2], lr=hyp_cfg.lr0, momentum=hyp_cfg.momentum, nesterov=True)
+        optimizer: SGD = SGD(g[2], lr=hyp_cfg.lr0, momentum=hyp_cfg.momentum, nesterov=True)
 
         # add g0 with weight_decay
-        optimizer.add_param_group(
-            {'params': g[0], 'weight_decay': hyp_cfg.weight_decay})
+        optimizer.add_param_group({'params': g[0], 'weight_decay': hyp_cfg.weight_decay})
         # add g1 (BatchNorm2d weights)
         optimizer.add_param_group({'params': g[1], 'weight_decay': 0.0})
 
