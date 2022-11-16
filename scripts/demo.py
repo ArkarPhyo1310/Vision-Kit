@@ -34,7 +34,7 @@ def load_model(name: str, version: str, ckpt: str) -> YOLOV5 | YOLOV7:
         model = YOLOV5(variant=version).to(device)
         model.load_state_dict(torch.load(ckpt, map_location=device), strict=False)
     elif name == "yolov7":
-        model = YOLOV7(variant=version, deploy=True).to(device)
+        model = YOLOV7(variant=version).to(device)
         YOLOV7.reparameterization(model, ckpt)
     else:
         raise ValueError(f"{name} is wrong! Must be 'YOLOv5' or 'YOLOv7'.")

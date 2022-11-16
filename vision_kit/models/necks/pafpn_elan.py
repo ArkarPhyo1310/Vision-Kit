@@ -14,8 +14,7 @@ class PAFPNELAN(nn.Module):
         act: str = "silu",
     ) -> None:
         super().__init__()
-        assert variant.lower() in ["tiny", "base",
-                                   "extra"], f"Not supported version: {variant}!"
+        assert variant.lower() in ["tiny", "base", "x"], f"Not supported version: {variant}!"
         neck_cfg = {
             "base": {
                 "in_chs": (512, 1024),
@@ -44,7 +43,7 @@ class PAFPNELAN(nn.Module):
             act=act
         )
         self.lateral_elan = ELAN(
-            in_chs[0], out_chs[0], out_chs[0],
+            in_chs[0], 256, out_chs[0],
             act=act, depth=depth
         )
 
@@ -57,7 +56,7 @@ class PAFPNELAN(nn.Module):
             act=act
         )
         self.reduce_elan = ELAN(
-            int(in_chs[0] / 2), int(out_chs[0] / 2), int(out_chs[0] / 2),
+            int(in_chs[0] / 2), 128, int(out_chs[0] / 2),
             act=act, depth=depth
         )
 
@@ -65,19 +64,24 @@ class PAFPNELAN(nn.Module):
             int(in_chs[0] / 4), int(out_chs[0] / 2), act=act
         )
         self.bu_elan1 = ELAN(
-            in_chs[0], out_chs[0], out_chs[0], act=act, depth=depth
+            in_chs[0], 256, out_chs[0], act=act, depth=depth
         )
 
         self.mp_3xconvs_2 = MPx3Conv(
             int(in_chs[0] / 2), out_chs[0], act=act
         )
         self.bu_elan2 = ELAN(
-            in_chs[1], out_chs[1], out_chs[1], act=act, depth=depth
+            in_chs[1], 512, out_chs[1], act=act, depth=depth
         )
 
-        self.repconv1 = RepConv(int(in_chs[0] / 4), out_chs[0], act=act)
-        self.repconv2 = RepConv(int(in_chs[0] / 2), out_chs[1], act=act)
-        self.repconv3 = RepConv(in_chs[0], out_chs[2], act=act)
+        if variant.lower() == "base":
+            self.pan_conv2 = RepConv(int(in_chs[0] / 4), out_chs[0], act=act)
+            self.pan_conv1 = RepConv(int(in_chs[0] / 2), out_chs[1], act=act)
+            self.pan_conv0 = RepConv(in_chs[0], out_chs[2], act=act)
+        else:
+            self.pan_conv2 = ConvBnAct(int(in_chs[0] / 4), out_chs[0], kernel=3, stride=1, act=act)
+            self.pan_conv1 = ConvBnAct(int(in_chs[0] / 2), out_chs[1], kernel=3, stride=1, act=act)
+            self.pan_conv0 = ConvBnAct(in_chs[0], out_chs[2], kernel=3, stride=1, act=act)
 
         self.concat = Concat()
         self.upsample = nn.Upsample(scale_factor=2, mode="nearest")
@@ -107,9 +111,9 @@ class PAFPNELAN(nn.Module):
         p_out2 = self.concat([x_92, x_90, x_sppcspc])
         pan_out0 = self.bu_elan2(p_out2)
 
-        pan_out2 = self.repconv1(pan_out2)
-        pan_out1 = self.repconv2(pan_out1)
-        pan_out0 = self.repconv3(pan_out0)
+        pan_out2 = self.pan_conv2(pan_out2)
+        pan_out1 = self.pan_conv1(pan_out1)
+        pan_out0 = self.pan_conv0(pan_out0)
 
         return pan_out2, pan_out1, pan_out0
 

@@ -27,7 +27,7 @@ class YOLOV7(nn.Module):
 
         self.backbone: v7Backbone = v7Backbone(variant, act=act)
         self.neck: PAFPNELAN = PAFPNELAN(variant, act=act)
-        self.head: YoloV7Head = YoloV7Head(num_classes=num_classes, deploy=deploy, export=export)
+        self.head: YoloV7Head = YoloV7Head(variant=variant, num_classes=num_classes, deploy=deploy, export=export)
 
         init_weights(self)
 

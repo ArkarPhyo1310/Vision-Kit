@@ -1,7 +1,8 @@
-from typing import List, Tuple
+from typing import Tuple
 
 import torch
 from torch import nn
+
 from vision_kit.models.modules.blocks import (SPP, SPPF, ConvBnAct,
                                               DWConvModule, Focus)
 from vision_kit.models.modules.bottlenecks import C3Bottleneck
@@ -115,4 +116,3 @@ class CSPDarknet(nn.Module):
         c5: torch.Tensor = self.stage4(c4)
 
         return c3, c4, c5
-

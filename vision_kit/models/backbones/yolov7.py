@@ -13,8 +13,7 @@ class v7Backbone(nn.Module):
     ) -> None:
         super().__init__()
 
-        assert variant.lower() in ["tiny", "base",
-                                   "extra"], f"Not supported version: {variant}!"
+        assert variant.lower() in ["tiny", "base", "x"], f"Not supported version: {variant}!"
 
         backbone_cfg: dict[str, dict[str, int]] = {
             "tiny": {

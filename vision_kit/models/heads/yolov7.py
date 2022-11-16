@@ -11,9 +11,9 @@ from vision_kit.utils.model_utils import (check_anchor_order, init_bias,
 class YoloV7Head(nn.Module):
     def __init__(
         self,
+        variant: str = "base",
         num_classes: int = 80,
         anchors: list = None,
-        in_chs: tuple = (256, 512, 1024),
         stride: tuple = (8., 16., 32.),
         deploy: bool = False,
         export: bool = False
@@ -25,6 +25,13 @@ class YoloV7Head(nn.Module):
                 [36, 75, 76, 55, 72, 146],  # P4/16
                 [142, 110, 192, 243, 459, 401]
             ]
+        head_cfg = {
+            "base": [256, 512, 1024],
+            "x": [320, 640, 1280]
+        }
+
+        in_chs = head_cfg[variant.lower()]
+
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.export: bool = export
         self.deploy: bool = deploy
