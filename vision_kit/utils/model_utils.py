@@ -123,11 +123,6 @@ def fuse_conv_and_bn(conv: nn.Conv2d, bn: nn.BatchNorm2d) -> nn.Conv2d:
     return fusedconv
 
 
-def intersect_dicts(da, db, exclude=()):
-    # Dictionary intersection of matching keys and shapes, omitting 'exclude' keys, using da values
-    return {k: v for k, v in da.items() if k in db and all(x not in k for x in exclude) and v.shape == db[k].shape}
-
-
 def load_ckpt(model, ckpt):
     model_state_dict = model.state_dict()
     load_dict = {}
@@ -140,25 +135,6 @@ def load_ckpt(model, ckpt):
         load_dict[key_model] = v_ckpt
     model.load_state_dict(load_dict, strict=False)
     return model
-
-
-def copy_attr(a, b, include=(), exclude=()):
-    # Copy attributes from b to a, options to only include [...] and to exclude [...]
-    for k, v in b.__dict__.items():
-        if (len(include) and k not in include) or k.startswith('_') or k in exclude:
-            continue
-        else:
-            setattr(a, k, v)
-
-
-def is_parallel(model):
-    # Returns True if model is of type DP or DDP
-    return type(model) in (nn.parallel.DataParallel, nn.parallel.DistributedDataParallel)
-
-
-def de_parallel(model):
-    # De-parallelize a model: returns single-GPU model if model is of type DP or DDP
-    return model.module if is_parallel(model) else model
 
 
 def process_ckpts(checkpoint:  Dict[str, Any]) -> Dict[str, Any]:

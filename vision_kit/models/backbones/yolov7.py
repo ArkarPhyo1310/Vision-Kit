@@ -25,7 +25,7 @@ class v7Backbone(nn.Module):
                 "base_chs": 32,
                 "elan_depth": 4
             },
-            "extra": {
+            "x": {
                 "base_chs": 40,
                 "elan_depth": 6
             },

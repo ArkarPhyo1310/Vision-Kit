@@ -22,7 +22,7 @@ class PAFPNELAN(nn.Module):
                 "out_chs": (256, 512, 1024),
                 "elan_depth": 4
             },
-            "extra": {
+            "x": {
                 "in_chs": (640, 1280),
                 "out_chs": (320, 640, 1280),
                 "elan_depth": 6

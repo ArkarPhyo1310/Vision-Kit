@@ -5,6 +5,7 @@ import warnings
 
 import pytorch_lightning as pl
 from omegaconf import OmegaConf
+
 from vision_kit.core.eval.det_evaluator import DetEvaluator
 from vision_kit.core.train.det_trainer import DetTrainer
 from vision_kit.data.datamodule import LitDataModule
@@ -51,19 +52,26 @@ def main(cfg, opt):
     cfg = update_loss_cfg(cfg)
 
     if opt.ckpt_dir:
-        filename = "last.ckpt" if opt.task == "train" else "best.ckpt"
+        if opt.task == "train":
+            logger.info("Resume Training...")
+            filename = "last.ckpt"
+        else:
+            logger.info("Evaluating...")
+            filename = "best.ckpt"
         ckpt_path = os.path.join(opt.ckpt_dir, filename)
     else:
         ckpt_path = None
 
     if opt.task == "train":
         model_module = DetTrainer(cfg, evaluator=evaluator, pretrained=True)
+        print("Start Training...")
         trainer.fit(model_module, datamodule=datamodule, ckpt_path=ckpt_path)
         trainer.test(model_module, datamodule=datamodule, verbose=False)
     elif opt.task == "eval":
         model_module = DetTrainer(cfg, evaluator=evaluator, pretrained=True)
         trainer.test(model_module, datamodule=datamodule, verbose=False, ckpt_path=ckpt_path)
     else:
+        print("Exporting to onnx and torchscript...")
         if ckpt_path:
             model_module = DetTrainer.load_from_checkpoint(checkpoint_path=ckpt_path)
         else:
