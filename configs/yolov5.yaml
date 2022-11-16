@@ -4,7 +4,7 @@ model:
   num_classes: 7
   input_size: [640, 640]
   act: "silu"
-  training_mode: true
+  deploy: False
   weight: "./pretrained_weights/yolov5s.pt"
 data:
   data_format: "yolo"

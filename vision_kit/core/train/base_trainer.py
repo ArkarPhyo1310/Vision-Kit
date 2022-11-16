@@ -6,6 +6,7 @@ import pytorch_lightning as pl
 import torch
 from pytorch_lightning.utilities.types import STEP_OUTPUT
 from torchinfo import summary
+
 from vision_kit.models.architectures import build_model
 from vision_kit.utils.logging_utils import logger
 from vision_kit.utils.model_utils import load_ckpt, process_ckpts
@@ -24,7 +25,7 @@ class TrainingModule(pl.LightningModule):
         self.pretrained = pretrained
 
     def model_info(self):
-        model_info = summary(self.model, input_size=self.example_input_array.shape, verbose=0, depth=2)
+        model_info = summary(self.model, input_size=self.example_input_array.shape, verbose=0)
         logger.info(f"Model Info\n{model_info}")
 
     def on_save_checkpoint(self, checkpoint: Dict[str, Any]) -> None:

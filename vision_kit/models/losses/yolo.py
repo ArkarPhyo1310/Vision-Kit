@@ -22,12 +22,12 @@ class YoloLoss:
 
         self.cp, self.cn = smooth_BCE(eps=hyp.get('label_smoothing', 0.0))
 
-    def set_anchor(self, anchors: torch.Tensor) -> None:
-        self.anchors = anchors
-        self.num_det_layers = len(anchors)
-        self.num_anchors = len(anchors[0].view(-1)) // 2
-        self.balance = {3: [4.0, 1.0, 0.4]}.get(
-            self.num_det_layers, [4.0, 1.0, 0.25, 0.06, 0.02])
+    def set_anchor(self, anchors: torch.Tensor, stride: torch.Tensor = None) -> None:
+        self.anchors: torch.Tensor = anchors
+        self.stride: torch.Tensor = stride
+        self.num_det_layers: int = len(anchors)
+        self.num_anchors: int = len(anchors[0].view(-1)) // 2
+        self.balance: list[float] = {3: [4.0, 1.0, 0.4]}.get(self.num_det_layers, [4.0, 1.0, 0.25, 0.06, 0.02])
 
     def __call__(self, preds: torch.Tensor, targets: torch.Tensor):
         loss_cls = torch.zeros(1, device=self.device)
@@ -51,8 +51,8 @@ class YoloLoss:
                 pxy = pxy.sigmoid() * 2 - 0.5
                 pwh = (pwh.sigmoid() * 2) ** 2 * anchs[idx]
                 pbox = torch.cat((pxy, pwh), 1)
-                # iou = bbox_overlaps(pbox, tbox[idx], mode="ciou", is_aligned=True, box_format="cxcywh")
-                iou = bbox_iou(pbox, tbox[idx], CIoU=True).squeeze()
+                iou = bbox_overlaps(pbox, tbox[idx], mode="ciou", is_aligned=True, box_format="cxcywh")
+                # iou = bbox_iou(pbox, tbox[idx], CIoU=True).squeeze()
                 loss_box += (1.0 - iou).mean()
 
                 iou = iou.detach().clamp(0).type(tobj.dtype)

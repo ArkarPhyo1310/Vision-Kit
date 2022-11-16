@@ -4,8 +4,8 @@ model:
   num_classes: 80
   input_size: [640, 640]
   act: "silu"
-  training_mode: true
-  weight: "./pretrained_weights/yolov7.pt"
+  deploy: False
+  weight: "./pretrained_weights/yolov7base.pt"
 data:
   data_format: "yolo"
   data_dir: "/home/arkar/Downloads/Compressed/Aquarium"
@@ -13,7 +13,7 @@ data:
   train_path: "train/images"
   val_path: "valid/images"
   test_path: "test/images"
-  batch_size: 8
+  batch_size: 4
   max_epochs: 20
   num_workers: 8
   filter_classes: []

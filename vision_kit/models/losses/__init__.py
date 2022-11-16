@@ -1,1 +1,1 @@
-from .yolo import YoloLoss
+from .yolo import YoloLoss, YoloLossOTA

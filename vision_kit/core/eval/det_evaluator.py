@@ -179,14 +179,7 @@ class DetEvaluator:
             predictions.append(predn)
             detections.append(targetn)
 
-        if len(predictions) == 0:
-            pred_res = torch.tensor([], device=self.device)
-            det_res = torch.tensor([], device=self.device)
-        else:
-            pred_res = torch.vstack(predictions)
-            det_res = torch.vstack(detections)
-
-        return pred_res, det_res
+        return torch.vstack(predictions), torch.vstack(detections)
 
     def summarize(self, details_per_class: bool = False, do_coco_eval: bool = False):
         self.stats = [torch.cat(x, 0).cpu().numpy() for x in zip(*self.stats)]

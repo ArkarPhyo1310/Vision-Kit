@@ -20,8 +20,7 @@ def convert_yolov5(version: str = "s") -> None:
 
     new_model: Dict[str, Any] = model.state_dict()
 
-    modelv5 = torch.hub.load('/home/arkar/ME/yolov5/',
-                             model_name, autoshape=False, force_reload=False, source="local")
+    modelv5 = torch.hub.load('/home/arkar/ME/yolov5/', model_name, autoshape=False, force_reload=False, source="local")
     state_dict = modelv5.state_dict()
     state_dict.pop('model.model.24.anchors', None)
 
@@ -30,8 +29,7 @@ def convert_yolov5(version: str = "s") -> None:
 
     # with torch.no_grad():
     model.load_state_dict(new_model)
-    torch.save(model.half().state_dict(),
-               f"./pretrained_weights/{model_name}.pt")
+    torch.save(model.half().state_dict(), f"./pretrained_weights/{model_name}.pt")
 
 
 @torch.no_grad()
@@ -41,7 +39,7 @@ def convert_yolov7(version: str = "base") -> None:
     assert version in [
         "base", "extra"], f"\"{version}\" is either wrong or unsupported!"
 
-    v7model = YOLOV7(training_mode=True).to("cpu")
+    v7model = YOLOV7(deploy=False).to("cpu")
     v7state_dict: Dict[str, Any] = v7model.state_dict()
 
     modelv7 = torch.hub.load('/home/arkar/ME/yolov7/', 'custom', path_or_model="/home/arkar/ME/yolov7/yolov7_training.pt",
@@ -50,7 +48,6 @@ def convert_yolov7(version: str = "base") -> None:
     state_dict.pop('model.105.anchors', None)
     state_dict.pop('model.105.anchor_grid', None)
 
-    print("Check Finish")
     for new, old in zip(v7state_dict.keys(), state_dict.keys()):
         v7state_dict[new] = state_dict[old]
 

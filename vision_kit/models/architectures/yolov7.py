@@ -20,16 +20,14 @@ class YOLOV7(nn.Module):
         num_classes: int = 80,
         variant: str = "base",
         act: str = "silu",
-        training_mode: bool = True,
+        deploy: bool = True,
         export: bool = False
     ) -> None:
         super(YOLOV7, self).__init__()
 
-        self.training_mode = training_mode
-
         self.backbone: v7Backbone = v7Backbone(variant, act=act)
         self.neck: PAFPNELAN = PAFPNELAN(variant, act=act)
-        self.head: YoloV7Head = YoloV7Head(num_classes=num_classes, export=export, training_mode=training_mode)
+        self.head: YoloV7Head = YoloV7Head(num_classes=num_classes, deploy=deploy, export=export)
 
         init_weights(self)
 
@@ -112,7 +110,7 @@ if __name__ == "__main__":
     cfg = OmegaConf.load("./configs/yolov7.yaml")
     x = torch.rand((1, 3, 640, 640))
     # model = build_model(cfg)
-    model = YOLOV7(training_mode=False)
+    model = YOLOV7()
     # model.eval()
     model.fuse()
     for key in model.state_dict().keys():

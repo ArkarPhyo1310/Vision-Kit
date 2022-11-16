@@ -15,7 +15,7 @@ class YoloV7Head(nn.Module):
         anchors: list = None,
         in_chs: tuple = (256, 512, 1024),
         stride: tuple = (8., 16., 32.),
-        training_mode: bool = False,
+        deploy: bool = False,
         export: bool = False
     ) -> None:  # detection layer
         super(YoloV7Head, self).__init__()
@@ -25,9 +25,9 @@ class YoloV7Head(nn.Module):
                 [36, 75, 76, 55, 72, 146],  # P4/16
                 [142, 110, 192, 243, 459, 401]
             ]
-        self.device = torch.device(
-            "cuda" if torch.cuda.is_available() else "cpu")
-        self.training_mode = training_mode
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.export: bool = export
+        self.deploy: bool = deploy
         self.num_classes = num_classes  # number of classes
         self.no = num_classes + 5  # number of outputs per anchor
         self.num_det_layers = len(anchors)  # number of detection layers
@@ -45,20 +45,19 @@ class YoloV7Head(nn.Module):
         self.m: nn.ModuleList = nn.ModuleList(nn.Conv2d(x, self.no * self.num_anchors, 1)
                                               for x in in_chs)  # output conv
 
-        if self.training_mode:
+        if not self.deploy:
             self.ia: nn.ModuleList = nn.ModuleList(Implicit(x, ops="add") for x in in_chs)
             self.im: nn.ModuleList = nn.ModuleList(
                 Implicit(self.no * self.num_anchors, ops="multiply") for _ in in_chs)
 
         init_bias(self.m, self.stride, self.num_anchors, self.num_classes)
-        self.export: bool = export
 
     def forward(self, x: Tuple[torch.Tensor]) -> Tuple[torch.Tensor] | tuple[torch.Tensor, Tuple[torch.Tensor]]:
         # x = x.copy()  # for profiling
         z = []  # inference output
         x = list(x)
         for i in range(self.num_det_layers):
-            if hasattr(self, "ia") and hasattr(self, "im"):
+            if self.training or hasattr(self, "ia"):
                 x[i] = self.m[i](self.ia[i](x[i]))  # conv
                 x[i] = self.im[i](x[i])
             else:
@@ -66,7 +65,7 @@ class YoloV7Head(nn.Module):
             bs, _, ny, nx = x[i].shape  # x(bs,255,20,20) to x(bs,3,20,20,85)
             x[i] = x[i].view(bs, self.num_anchors, self.no, ny, nx).permute(0, 1, 3, 4, 2).contiguous()
 
-            if not self.training_mode:  # inference
+            if not self.training:  # inference
                 if self.grid[i].shape[2:4] != x[i].shape[2:4]:
                     self.grid[i] = self._make_grid(nx, ny).to(x[i].device)
                 y = x[i].sigmoid()
@@ -81,7 +80,7 @@ class YoloV7Head(nn.Module):
                     y = torch.cat((xy, wh, conf), 4)
                 z.append(y.view(bs, -1, self.no))
 
-        return x if self.training_mode else (torch.cat(z, 1), ) if self.export else (torch.cat(z, 1), x)
+        return x if self.training else (torch.cat(z, 1), ) if self.export else (torch.cat(z, 1), x)
 
     @staticmethod
     def _make_grid(nx=20, ny=20) -> torch.Tensor:

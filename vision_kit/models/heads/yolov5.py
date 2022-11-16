@@ -16,7 +16,7 @@ class YoloV5Head(nn.Module):
         anchors: list = None,
         in_chs: tuple = (256, 512, 1024),
         stride: list = [8., 16., 32.],
-        training_mode: bool = False,
+        deploy: bool = False,
         export: bool = False
     ) -> None:
         super(YoloV5Head, self).__init__()
@@ -34,15 +34,12 @@ class YoloV5Head(nn.Module):
         self.no: int = num_classes + 5  # number of outputs per anchor
         self.num_det_layers: int = len(anchors)  # number of detection layers
         self.num_anchors: int = len(anchors[0]) // 2  # number of anchors
-        self.grid: list[torch.Tensor] = [
-            torch.zeros(1)] * self.num_det_layers  # init_grid
-        self.anchor_grid: list[torch.Tensor] = [torch.zeros(1)] * \
-            self.num_det_layers  # init_anchor_grid
+        self.grid: list[torch.Tensor] = [torch.zeros(1)] * self.num_det_layers  # init_grid
+        self.anchor_grid: list[torch.Tensor] = [torch.zeros(1)] * self.num_det_layers  # init_anchor_grid
 
         self.stride: torch.Tensor = torch.tensor(stride, device=self.device)
 
-        self.anchors: torch.Tensor = torch.tensor(anchors, device=self.device).float().view(
-            self.num_det_layers, -1, 2)
+        self.anchors: torch.Tensor = torch.tensor(anchors, device=self.device).float().view(self.num_det_layers, -1, 2)
         self.anchors /= self.stride.view(-1, 1, 1)
         self.anchors = check_anchor_order(self.anchors, self.stride)
 
@@ -50,8 +47,6 @@ class YoloV5Head(nn.Module):
             nn.Conv2d(int(x * width), self.no * self.num_anchors, 1)
             for x in in_chs
         )
-
-        self.training_mode = training_mode
         self.export: bool = export
 
         init_bias(self.m, self.stride, self.num_anchors, self.num_classes)
@@ -62,16 +57,14 @@ class YoloV5Head(nn.Module):
         for i in range(self.num_det_layers):
             x[i] = self.m[i](x[i])
             bs, _, ny, nx = x[i].shape
-            x[i] = x[i].view(bs, self.num_anchors, self.no, ny,
-                             nx).permute(0, 1, 3, 4, 2).contiguous()
+            x[i] = x[i].view(bs, self.num_anchors, self.no, ny, nx).permute(0, 1, 3, 4, 2).contiguous()
 
-            if not self.training_mode:
+            if not self.training:
                 if self.export or self.grid[i].shape[2:4] != x[i].shape[2:4]:
-                    self.grid[i], self.anchor_grid[i] = self._make_grid(
-                        nx, ny, i)
+                    self.grid[i], self.anchor_grid[i] = self._make_grid(nx, ny, i)
 
                 y = x[i].sigmoid().to(self.device)
-                if not self.export:
+                if not torch.onnx.is_in_onnx_export():
                     y[..., 0:2] = (y[..., 0:2] * 2 + self.grid[i]) * self.stride[i]  # xy
                     y[..., 2:4] = (y[..., 2:4] * 2) ** 2 * self.anchor_grid[i]  # wh
                 else:
@@ -82,7 +75,7 @@ class YoloV5Head(nn.Module):
                     y = torch.cat((xy, wh, conf), 4)
                 z.append(y.view(bs, -1, self.no))
 
-        return x if self.training_mode else (torch.cat(z, 1), ) if self.export else (torch.cat(z, 1), x)
+        return x if self.training else (torch.cat(z, 1), ) if self.export else (torch.cat(z, 1), x)
 
     def _make_grid(self, nx=20, ny=20, i=0) -> Tuple[torch.Tensor, torch.Tensor]:
         d: torch.device = self.anchors[i].device
@@ -93,7 +86,6 @@ class YoloV5Head(nn.Module):
         yv, xv = meshgrid(y, x)
         # add grid offset, i.e. y = 2.0 * x - 0.5
         grid: torch.Tensor = torch.stack((xv, yv), 2).expand(shape) - 0.5
-        anchor_grid: torch.Tensor = (self.anchors[i] * self.stride[i]
-                                     ).view((1, self.num_anchors, 1, 1, 2)).expand(shape)
+        anchor_grid: torch.Tensor = (self.anchors[i] * self.stride[i]).view((1, self.num_anchors, 1, 1, 2)).expand(shape)
 
         return grid, anchor_grid

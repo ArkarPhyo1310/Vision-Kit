@@ -5,12 +5,12 @@ import torch
 import wandb
 from pytorch_lightning.loggers import TensorBoardLogger, WandbLogger
 from pytorch_lightning.utilities.types import STEP_OUTPUT
-from torch import nn
+from torch.optim import SGD
 from torch.optim.lr_scheduler import LambdaLR
 from torchmetrics.detection.mean_ap import MeanAveragePrecision
 
 from vision_kit.core.train.base_trainer import TrainingModule
-from vision_kit.models.architectures import build_model
+from vision_kit.models.architectures import YOLOV5, YOLOV7, build_model
 from vision_kit.models.losses.yolo import YoloLoss
 from vision_kit.utils.drawing import grid_save
 from vision_kit.utils.image_proc import nms
@@ -46,8 +46,7 @@ class DetTrainer(TrainingModule):
         imgs /= 255.0
 
         if batch_idx == 0:
-            self.train_batch_grid = grid_save(
-                imgs, targets, name=f"{self.data_cfg.output_dir}/train")
+            self.train_batch_grid = grid_save(imgs, targets, name=f"{self.data_cfg.output_dir}/train")
 
         outputs = self.model(imgs)
         targets = torch.cat(targets, 0)
@@ -61,17 +60,14 @@ class DetTrainer(TrainingModule):
         imgs /= 255.0
 
         if batch_idx == 0:
-            self.val_batch_grid = grid_save(
-                imgs, targets, name=f"{self.data_cfg.output_dir}/val")
+            self.val_batch_grid = grid_save(imgs, targets, name=f"{self.data_cfg.output_dir}/val")
 
         outputs = self.get_model()(imgs)
         output = nms(outputs[0], self.test_cfg.conf_thresh,
                      self.test_cfg.iou_thresh, multi_label=True)
 
         targets = torch.cat(targets, 0)
-        predn, targetn = self.evaluator.evaluate(
-            img=imgs, img_infos=img_infos, idxs=idxs, preds=output, targets=targets
-        )
+        self.evaluator.evaluate(img=imgs, img_infos=img_infos, idxs=idxs, preds=output, targets=targets)
 
     def test_step(self, batch, batch_idx) -> Optional[STEP_OUTPUT]:
         imgs, targets, img_infos, idxs = batch
@@ -79,8 +75,7 @@ class DetTrainer(TrainingModule):
         imgs /= 255.0
 
         if batch_idx == 0:
-            self.test_batch_grid = grid_save(
-                imgs, targets, name=f"{self.data_cfg.output_dir}/test")
+            self.test_batch_grid = grid_save(imgs, targets, name=f"{self.data_cfg.output_dir}/test")
 
         outputs = self.get_model()(imgs)
         output = nms(outputs[0], self.test_cfg.conf_thresh,
@@ -181,33 +176,8 @@ class DetTrainer(TrainingModule):
         logger.info(self.mAP_table.table)
         logger.info(self.mAR_table.table)
 
-    def configure_optimizers(self):
-        g = [], [], []  # optimizer parameter groups
-        # normalization layers, i.e. BatchNorm2d()
-        bn = tuple(v for k, v in nn.__dict__.items() if 'Norm' in k)
-        for v in self.model.modules():
-            if hasattr(v, 'bias') and isinstance(v.bias, nn.Parameter):  # bias (no decay)
-                g[2].append(v.bias)
-            if isinstance(v, bn):  # weight (no decay)
-                g[1].append(v.weight)
-            elif hasattr(v, 'weight') and isinstance(v.weight, nn.Parameter):  # weight (with decay)
-                g[0].append(v.weight)
-
-        optimizer = torch.optim.SGD(
-            g[2], lr=self.hyp_cfg.lr0, momentum=self.hyp_cfg.momentum, nesterov=True)
-
-        # add g0 with weight_decay
-        optimizer.add_param_group(
-            {'params': g[0], 'weight_decay': self.hyp_cfg.weight_decay})
-        # add g1 (BatchNorm2d weights)
-        optimizer.add_param_group({'params': g[1], 'weight_decay': 0.0})
-
-        def lf(x): return (1 - x / self.data_cfg.max_epochs) * \
-            (1.0 - self.hyp_cfg['lrf']) + self.hyp_cfg['lrf']  # linear
-        lr_scheduler = LambdaLR(optimizer, lr_lambda=lf)
-
-        # optimizer, lr_scheduler = self.model.get_optimizer(
-        #     self.hyp_cfg, self.data_cfg.max_epochs)
+    def configure_optimizers(self) -> tuple[list[SGD], list[LambdaLR]]:
+        optimizer, lr_scheduler = self.model.get_optimizer(self.hyp_cfg, self.data_cfg.max_epochs)
 
         return [optimizer], [lr_scheduler]
 
@@ -225,15 +195,19 @@ class DetTrainer(TrainingModule):
 
         optimizer.zero_grad()
 
-        def lf(x): return (1 - x / self.data_cfg.max_epochs) * \
-            (1.0 - self.hyp_cfg.lrf) + self.hyp_cfg.lrf  # linear
+        if isinstance(self.model, YOLOV5):
+            pg_idx = 0
+        elif isinstance(self.model, YOLOV7):
+            pg_idx = 2
 
-        ni = self.trainer.global_step
+        def lf(x):
+            return (1 - x / self.data_cfg.max_epochs) * (1.0 - self.hyp_cfg.lrf) + self.hyp_cfg.lrf  # linear
+
+        ni: int = self.trainer.global_step
         if ni <= self.nw:
-            xi = [0, self.nw]
+            xi: list[int] = [0, self.nw]
             for j, x in enumerate(optimizer.param_groups):
-                x['lr'] = np.interp(ni, xi, [self.hyp_cfg['warmup_bias_lr'] if j ==
-                                             0 else 0.0, x['initial_lr'] * lf(epoch)])
+                x['lr'] = np.interp(ni, xi, [self.hyp_cfg['warmup_bias_lr'] if j == pg_idx else 0.0, x['initial_lr'] * lf(epoch)])
                 if 'momentum' in x:
                     x['momentum'] = np.interp(
                         ni, xi, [self.hyp_cfg.warmup_momentum, self.hyp_cfg.momentum])
@@ -242,5 +216,4 @@ class DetTrainer(TrainingModule):
         optimizer.step(closure=optimizer_closure)
 
     def on_train_start(self) -> None:
-        self.nw = max(
-            round(self.hyp_cfg['warmup_epochs'] * self.trainer.num_training_batches), 100)
+        self.nw: int = max(round(self.hyp_cfg['warmup_epochs'] * self.trainer.num_training_batches), 100)

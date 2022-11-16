@@ -5,7 +5,7 @@ from torch.optim.lr_scheduler import LambdaLR
 
 from vision_kit.models.backbones import CSPDarknet
 from vision_kit.models.heads import YoloV5Head
-from vision_kit.models.modules.blocks import ConvBnAct
+from vision_kit.models.modules import ConvBnAct
 from vision_kit.models.necks import PAFPN
 from vision_kit.utils.general import dw_multiple_generator
 from vision_kit.utils.model_utils import fuse_conv_and_bn, init_weights
@@ -17,7 +17,7 @@ class YOLOV5(nn.Module):
         variant: str = "s",
         act: str = "silu",
         num_classes: int = 80,
-        training_mode: bool = True,
+        deploy: bool = False,
         export: bool = False
     ) -> None:
         super(YOLOV5, self).__init__()
@@ -26,7 +26,7 @@ class YOLOV5(nn.Module):
 
         self.backbone: CSPDarknet = CSPDarknet(depth_mul=dep_mul, width_mul=wid_mul, act=act)
         self.neck: PAFPN = PAFPN(depth_mul=dep_mul, width_mul=wid_mul, act=act)
-        self.head: YoloV5Head = YoloV5Head(num_classes, width=wid_mul, training_mode=training_mode, export=export)
+        self.head: YoloV5Head = YoloV5Head(num_classes, width=wid_mul, deploy=deploy, export=export)
 
         init_weights(self)
 
@@ -65,8 +65,7 @@ class YOLOV5(nn.Module):
         # add g1 (BatchNorm2d weights)
         optimizer.add_param_group({'params': g[1], 'weight_decay': 0.0})
 
-        def lf(x): return (1 - x / max_epochs) * \
-            (1.0 - hyp_cfg['lrf']) + hyp_cfg['lrf']  # linear
+        def lf(x): return (1 - x / max_epochs) * (1.0 - hyp_cfg['lrf']) + hyp_cfg['lrf']  # linear
         lr_scheduler: LambdaLR = LambdaLR(optimizer, lr_lambda=lf)
 
         return optimizer, lr_scheduler
