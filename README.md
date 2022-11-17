@@ -30,7 +30,7 @@ python scripts/demo.py --help
 
 ## Model Zoo
 
-<table>
+<table widht="100%">
     <tr align="center">
         <th>No.</th>
         <th width="30%">Model</th>
