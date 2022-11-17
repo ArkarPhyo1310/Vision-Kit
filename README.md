@@ -36,7 +36,7 @@ python scripts/demo.py --help
         <th width="30%">Model</th>
         <th>Config</th>
         <th>Version</th>
-        <th>Image Size</th>
+        <th width="30%">Image Size</th>
         <th>Weight</th>
     </tr>
     <tr align="center">
