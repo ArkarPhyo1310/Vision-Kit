@@ -30,7 +30,7 @@ python scripts/demo.py --help
 
 ## Model Zoo
 
-<table style="width: 100%;">
+<table width="100%">
     <tr>
         <th>No.</th>
         <th>Model</th>
@@ -80,16 +80,6 @@ python scripts/demo.py --help
         <td><a href="https://drive.google.com/file/d/1-V_RX4DUJjj2Iqwv4oqYyMHF7gfvuZKi/view?usp=share_link">weight</a></td>
     </tr>
 </table>
-
-| **No.** | **Model** | **Image Size** | **Weight** |
-|:-------:|:---------|:--------------:|:----------:|
-| **1.**  | yolov5-s  | 640            | link       |
-| **2.**  | yolov5-m  | 640            | link       |
-| **3.**  | yolov5-l  | 640            | link       |
-| **4.**  | yolov5-x  | 640            | link       |
-| **5.**  | yolov7    | 640            | link       |
-| **6**   | yolov7-x  | 640            | [link](https://drive.google.com/file/d/1-V_RX4DUJjj2Iqwv4oqYyMHF7gfvuZKi/view?usp=share_link)       |
-
 
 ### Supported Models
 
