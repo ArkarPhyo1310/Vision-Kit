@@ -30,7 +30,7 @@ python scripts/demo.py --help
 
 ## Model Zoo
 
-<table widht="100%">
+<table width="100%">
     <tr align="center">
         <th>No.</th>
         <th width="30%">Model</th>
@@ -81,7 +81,7 @@ python scripts/demo.py --help
     </tr>
 </table>
 
-### Supported Models
+## Supported Models
 
 - YOLOv5
 - YOLOv7
