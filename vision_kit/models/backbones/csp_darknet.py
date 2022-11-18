@@ -1,7 +1,8 @@
-from typing import List, Tuple
+from typing import Tuple
 
 import torch
 from torch import nn
+
 from vision_kit.models.modules.blocks import (SPP, SPPF, ConvBnAct,
                                               DWConvModule, Focus)
 from vision_kit.models.modules.bottlenecks import C3Bottleneck

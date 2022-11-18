@@ -5,13 +5,15 @@ import warnings
 
 import pytorch_lightning as pl
 from omegaconf import OmegaConf
+
 from vision_kit.core.eval.det_evaluator import DetEvaluator
-from vision_kit.core.train.det_trainer import TrainingModule
+from vision_kit.core.train.det_trainer import DetTrainer
 from vision_kit.data.datamodule import LitDataModule
-from vision_kit.utils.general import mk_output_dir
+from vision_kit.utils.general import mk_output_dir, update_loss_cfg
 from vision_kit.utils.logging_utils import logger, setup_logger
 from vision_kit.utils.training_helpers import (get_callbacks, get_loggers,
                                                get_profilers)
+
 warnings.filterwarnings(action="ignore")
 logging.getLogger("pytorch_lightning").setLevel(logging.ERROR)
 
@@ -32,7 +34,6 @@ def main(cfg, opt):
         class_labels=cfg.data.class_labels,
         img_size=cfg.model.input_size
     )
-    cfg.model.weight = "./pretrained_weights/yolov5s.pt"
 
     trainer = pl.Trainer(
         accelerator="gpu",
@@ -48,23 +49,33 @@ def main(cfg, opt):
         enable_model_summary=False
     )
 
-    model_module = TrainingModule(cfg, evaluator=evaluator, pretrained=True)
+    cfg = update_loss_cfg(cfg)
 
     if opt.ckpt_dir:
-        filename = "last.ckpt" if opt.task == "train" else "best.ckpt"
+        if opt.task == "train":
+            logger.info("Resume Training...")
+            filename = "last.ckpt"
+        else:
+            logger.info("Evaluating...")
+            filename = "best.ckpt"
         ckpt_path = os.path.join(opt.ckpt_dir, filename)
     else:
         ckpt_path = None
 
     if opt.task == "train":
+        model_module = DetTrainer(cfg, evaluator=evaluator, pretrained=True)
+        print("Start Training...")
         trainer.fit(model_module, datamodule=datamodule, ckpt_path=ckpt_path)
         trainer.test(model_module, datamodule=datamodule, verbose=False)
     elif opt.task == "eval":
+        model_module = DetTrainer(cfg, evaluator=evaluator, pretrained=True)
         trainer.test(model_module, datamodule=datamodule, verbose=False, ckpt_path=ckpt_path)
     else:
+        print("Exporting to onnx and torchscript...")
         if ckpt_path:
-            model_module = TrainingModule.load_from_checkpoint(
-                checkpoint_path=ckpt_path, cfg=cfg, evaluator=evaluator, pretrained=True)
+            model_module = DetTrainer.load_from_checkpoint(checkpoint_path=ckpt_path)
+        else:
+            model_module = DetTrainer(cfg, evaluator=evaluator, pretrained=True)
         file_name = f"{cfg.model.name.lower()}_{cfg.model.version}"
         save_path = os.path.join(cfg.data.output_dir, "weights")
         os.makedirs(save_path, exist_ok=True)
@@ -102,7 +113,7 @@ if __name__ == "__main__":
     pl.seed_everything(opt.seed, workers=True)
 
     cfg = OmegaConf.load(opt.config)
-    output_dir = mk_output_dir(cfg.data.output_dir, cfg.model.name)
+    output_dir = mk_output_dir(cfg.data.output_dir, cfg.model.name, opt.task)
     setup_logger(output_dir, filename="log.log")
     cfg.data.output_dir = output_dir
 

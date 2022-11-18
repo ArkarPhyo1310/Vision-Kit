@@ -3,6 +3,7 @@ from typing import Tuple
 import numpy as np
 import torch
 from torchvision.ops.boxes import box_iou
+
 from vision_kit.utils.bboxes import cxcywh_to_xyxy, xyxy_to_xywh
 from vision_kit.utils.image_proc import scale_coords
 from vision_kit.utils.metrics import smooth

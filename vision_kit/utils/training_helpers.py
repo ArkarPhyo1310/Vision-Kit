@@ -1,5 +1,6 @@
 import os
 from datetime import timedelta
+from glob import glob
 from typing import Any, Dict, Optional, Union
 
 import pytorch_lightning as pl
@@ -36,13 +37,22 @@ class ModelCkpt(ModelCheckpoint):
         super().__init__(dirpath, filename, monitor, verbose, save_last, save_top_k, save_weights_only, mode,
                          auto_insert_metric_name, every_n_train_steps, train_time_interval, every_n_epochs, save_on_train_epoch_end)
 
+    def on_exception(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule", exception: BaseException) -> None:
+        self.save_best()
+
     def on_train_end(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
-        score = round(self.best_model_score.detach().cpu().item(), 2)
-        best_ckpt = torch.load(self.best_model_path, map_location="cpu")
-        output_dir = self.dirpath.replace("ckpts", "weights")
-        os.makedirs(output_dir, exist_ok=True)
-        save_path = os.path.join(output_dir, f'best-map50_{score}.pt')
-        torch.save(best_ckpt["model"], save_path)
+        self.save_best()
+
+    def save_best(self):
+        if self.best_model_path and self.best_model_score:
+            score = round(self.best_model_score.detach().cpu().item(), 2)
+            best_ckpt = torch.load(self.best_model_path, map_location="cpu")
+            output_dir = self.dirpath.replace("ckpts", "weights")
+            os.makedirs(output_dir, exist_ok=True)
+            for pt_file in glob(os.path.join(output_dir, "*.pt")):
+                os.remove(pt_file)
+            save_path = os.path.join(output_dir, f'best-map50_{score}.pt')
+            torch.save(best_ckpt["model"], save_path)
 
 
 def get_profilers(dirpath: str, filename: str, name: str = "simple"):

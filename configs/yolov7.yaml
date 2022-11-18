@@ -1,11 +1,11 @@
 model:
-  name: "YOLOv5"
-  version: "s"
-  num_classes: 7
+  name: "YOLOv7"
+  version: "base"
+  num_classes: 80
   input_size: [640, 640]
   act: "silu"
   deploy: False
-  weight: "./pretrained_weights/yolov5s.pt"
+  weight: "./pretrained_weights/yolov7base.pt"
 data:
   data_format: "yolo"
   data_dir: "/home/arkar/Downloads/Compressed/Aquarium"
@@ -13,7 +13,7 @@ data:
   train_path: "train/images"
   val_path: "valid/images"
   test_path: "test/images"
-  batch_size: 8
+  batch_size: 4
   max_epochs: 20
   num_workers: 8
   filter_classes: []
@@ -24,25 +24,26 @@ testing:
   val_interval: 1
 hypermeters:
   lr0: 0.01  # initial learning rate (SGD=1E-2, Adam=1E-3)
-  lrf: 0.01  # final OneCycleLR learning rate (lr0 * lrf)
+  lrf: 0.1  # final OneCycleLR learning rate (lr0 * lrf)
   momentum: 0.937  # SGD momentum/Adam beta1
   weight_decay: 0.0005  # optimizer weight decay 5e-4
   warmup_epochs: 3.0  # warmup epochs (fractions ok)
+  warmup_momentum: 0.8  # warmup initial momentum
   warmup_bias_lr: 0.1  # warmup initial bias lr
-  warmup_momentum: 0.8 # warmup initial momentum
   box: 0.05  # box loss gain
-  cls: 0.5  # cls loss gain
+  cls: 0.3  # cls loss gain
   cls_pw: 1.0  # cls BCELoss positive_weight
-  obj: 1.0  # obj loss gain (scale with pixels)
+  obj: 0.7  # obj loss gain (scale with pixels)
   obj_pw: 1.0  # obj BCELoss positive_weight
   iou_t: 0.20  # IoU training threshold
   anchor_t: 4.0  # anchor-multiple threshold
   fl_gamma: 0.0  # focal loss gamma (efficientDet default gamma=1.5)
   label_smoothing: 0.0
+  loss_ota: 1 # use ComputeLossOTA, use 0 for faster training
 augmentations:
   degrees: 0.0  # image rotation (+/- deg)
-  translate: 0.1  # image translation (+/- fraction)
-  scale: 0.5  # image scale (+/- gain)
+  translate: 0.2  # image translation (+/- fraction)
+  scale: 0.9  # image scale (+/- gain)
   shear: 0.0  # image shear (+/- deg)
   perspective: 0.0  # image perspective (+/- fraction), range 0-0.001
   flip_ud_prob: 0.0  # image flip up-down (probability)

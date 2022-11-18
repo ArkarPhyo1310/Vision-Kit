@@ -1,20 +1,24 @@
 from omegaconf.dictconfig import DictConfig
-from vision_kit.utils.general import dw_multiple_generator
 
 from .yolov5 import YOLOV5
+from .yolov7 import YOLOV7
 
 
 def build_model(cfg: DictConfig):
-    model_name = cfg.model.name
-    width, depth = dw_multiple_generator(cfg.model.version)
+    model_name: str = cfg.model.name
     if model_name == "YOLOv5":
         model: YOLOV5 = YOLOV5(
-            wid_mul=width,
-            dep_mul=depth,
+            variant=cfg.model.version,
             act=cfg.model.act,
             num_classes=cfg.model.num_classes,
-            hyp=cfg.hypermeters,
-            device=cfg.model.device
+            deploy=cfg.model.deploy
+        )
+    elif model_name == "YOLOv7":
+        model: YOLOV7 = YOLOV7(
+            variant=cfg.model.version,
+            act=cfg.model.act,
+            num_classes=cfg.model.num_classes,
+            deploy=cfg.model.deploy
         )
     else:
         raise NotImplemented
